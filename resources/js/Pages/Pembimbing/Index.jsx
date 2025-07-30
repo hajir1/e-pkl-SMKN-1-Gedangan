@@ -190,7 +190,7 @@ const Index = () => {
                 <div className="relative bg-white rounded-lg shadow-sm ">
                     <TitleModal
                         icon={<X />}
-                        title={"Filter Dan Sorting Registrasi Siswa"}
+                        title={"Filter Dan Sorting Pembimbing"}
                         onClick={() => {
                             setSortModal(!sortModal);
                         }}

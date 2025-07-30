@@ -43,13 +43,14 @@ class JurnalExport implements FromView
         })
         ->when($this->request->filled(["start_date","end_date"]),function($query){
             $query->whereBetween("jurnals.created_at",[$this->request->start_date, $this->request->end_date]);
-        })
-        ->when($this->request->filled("search"),function($query){
-            $query->whereHas("user",function($q2){
-                $q2->where("name","like","%{$this->request->search}%");
+        })->when($this->request->filled("search"),function($query){
+           $query->where(function($q)  {
+             $q->whereHas("user",function($q2){
+                $q2->where("name","like","{$this->request->search}%");
             })
-            ->orWhere("jurnals.keterangan","like","%{$this->request->search}%")
-            ->orWhere("jurnals.kegiatan","like","%{$this->request->search}%");
+            ->orWhere("jurnals.keterangan","like","{$this->request->search}%")
+            ->orWhere("jurnals.kegiatan","like","{$this->request->search}%");
+           });
         })
         ->when($this->request->input("sort_by") === "nama",function($query){
                 $query->join("users", "users.id","=","jurnals.user_id")
@@ -59,7 +60,7 @@ class JurnalExport implements FromView
         ->when($this->request->input("sort_by") !== "nama",function($query){
                 $query->orderBy($this->request->input("sort_by","jurnals.created_at"),$this->request->input("sort_order","desc"));
         })
-        ->latest()->paginate(10)->withQueryString();
+        ->latest()->get();
         return view("excel.jurnal",compact("siswas"));
     }
 }

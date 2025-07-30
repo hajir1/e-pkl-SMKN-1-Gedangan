@@ -127,7 +127,10 @@ const SideMenu = ({ children, ...props }) => {
         {
             id: 8,
             nama: "Pembimbing",
-            pathname: "pembimbing",
+            pathname:
+                window.location.pathname.split("/", 3)[1] === "pembimbing"
+                    ? window.location.pathname.replace("/", "")
+                    : "",
             route: route("pembimbing.index"),
             icon: <UserPen />,
             rolePermision: ["admin"],
@@ -136,7 +139,10 @@ const SideMenu = ({ children, ...props }) => {
         {
             id: 9,
             nama: "Siswa",
-            pathname: "siswa",
+            pathname:
+                window.location.pathname.split("/", 3)[1] === "siswa"
+                    ? window.location.pathname.replace("/", "")
+                    : "",
             route: route("siswa.index"),
             icon: <User />,
             rolePermision: [

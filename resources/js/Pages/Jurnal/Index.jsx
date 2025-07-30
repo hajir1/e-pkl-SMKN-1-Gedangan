@@ -3,7 +3,7 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import TitlePage from "@/Components/TitlePage";
 import Modal from "@/Components/Modal";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Check, Edit, Plus, Trash, X } from "lucide-react";
+import { Check, Edit, Plus, Regex, Trash, X } from "lucide-react";
 import TextInput from "@/Components/TextInput";
 import InputLabel from "@/Components/InputLabel";
 import InputError from "@/Components/InputError";
@@ -179,6 +179,25 @@ const Index = () => {
             "Ya, Export!"
         );
     };
+
+    const handleSteemingString = (str) => {
+        if (!filters?.search) return str;
+        const regex = new RegExp(`(${filters?.search})`, "gi");
+        const parts = str.split(regex);
+
+        return parts.map((part, index) =>
+            part.toLowerCase() === filters?.search.toLowerCase() ? (
+                <span
+                    key={index}
+                    className="font-extrabold text-green-100 bg-black"
+                >
+                    {part}
+                </span>
+            ) : (
+                <span key={index}>{part}</span>
+            )
+        );
+    };
     useEffect(() => {
         const interval = setInterval(() => {
             const t = handleTimeLeft();
@@ -189,6 +208,7 @@ const Index = () => {
             clearInterval(interval);
         };
     }, []);
+
     return (
         <AuthenticatedLayout>
             <Head title="Jurnal" />
@@ -267,7 +287,9 @@ const Index = () => {
                                             )}
                                         </td>
                                         <td className="px-4 text-center py-4">
-                                            {jurnal.kegiatan}
+                                            {handleSteemingString(
+                                                jurnal.kegiatan
+                                            )}
                                         </td>
                                         <td className="px-4 text-center py-4">
                                             <div className="flex justify-center items-center">

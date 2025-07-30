@@ -17,7 +17,7 @@ class TempatExport implements FromView
     {
         $tempats = Tempat::with("siswas")->whereHas("siswas",function($q2){
             $q2->where("tempat_id","=",$this->id);
-        });
+        })->get();
         
         return view("excel.tempat",compact("tempats"));
     }

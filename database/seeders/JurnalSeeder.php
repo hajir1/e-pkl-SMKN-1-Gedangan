@@ -14,6 +14,6 @@ class JurnalSeeder extends Seeder
     
     public function run(): void
     {
-        // Jurnal::factory(30)->create();
+        Jurnal::factory(1000)->create();
     }
 }

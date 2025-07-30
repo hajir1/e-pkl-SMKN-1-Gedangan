@@ -47,11 +47,13 @@ class JurnalController extends Controller
             $query->whereBetween("jurnals.created_at",[$request->start_date, $request->end_date]);
         })
         ->when($request->filled("search"),function($query)use($request){
-            $query->whereHas("user",function($q2)use($request){
-                $q2->where("name","like","%{$request->search}%");
+           $query->where(function($q) use($request) {
+             $q->whereHas("user",function($q2)use($request){
+                $q2->where("name","like","{$request->search}%");
             })
-            ->orWhere("jurnals.keterangan","like","%{$request->search}%")
-            ->orWhere("jurnals.kegiatan","like","%{$request->search}%");
+            ->orWhere("jurnals.keterangan","like","{$request->search}%")
+            ->orWhere("jurnals.kegiatan","like","{$request->search}%");
+           });
         })
         ->when($request->input("sort_by") === "nama",function($query)use($request){
                 $query->join("users", "users.id","=","jurnals.user_id")

@@ -9,6 +9,12 @@ export const AlertConfirm = (text, icon, cb, confirmBtn) => {
         confirmButtonColor: "#3085d6",
         cancelButtonColor: "#d33",
         confirmButtonText: confirmBtn ?? "Ya, Hapus!",
+        showClass: {
+            popup: "animate__animated animate__fadeInUp animate__faster",
+        },
+        hideClass: {
+            popup: "animate__animated animate__fadeOutDown animate__faster",
+        },
     }).then((result) => {
         if (result.isConfirmed) {
             cb();
@@ -21,10 +27,10 @@ export const AlertConfirmTwoOption = (text, icon, cb, confirmBtn) => {
         text: `${text}!`,
         icon: `${icon}`,
         showCancelButton: true,
-        showDenyButton:true,
+        showDenyButton: true,
         confirmButtonColor: "#3085d6",
         confirmButtonText: confirmBtn ?? "Ya, Hapus!",
-        denyButtonText:  "Tolak",
+        denyButtonText: "Tolak",
     }).then((result) => {
         cb(result);
     });

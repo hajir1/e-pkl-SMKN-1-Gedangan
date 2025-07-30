@@ -143,7 +143,7 @@
                         Jumlah Jurnal       
                     </td>
                     <td align="left" style="padding: 0.5rem 3rem;">
-                        <div>: {{ $user->jurnals_count ?? "Belum Diisi" }}</div>
+                        <div>: {{ $jumlahJurnals ?? "Belum Diisi" }}</div>
                     </td>
                 </tr>
                 <tr>

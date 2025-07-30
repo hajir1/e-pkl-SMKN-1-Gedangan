@@ -8,7 +8,7 @@ import Table from "@/Components/Table";
 import TitleModal from "@/Components/TitleModal";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { useTypeDashbard } from "@/state/Zustand";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import { debounce } from "lodash";
 import { Info, Search, X } from "lucide-react";
 import React, { use, useEffect, useRef, useState } from "react";
@@ -23,10 +23,7 @@ const Dashboard = () => {
         isVisibilityJurnal: auth.user.isVisibilityJurnal,
     });
 
-
-    console.log(jurnals)
     const [resizeImg, setResizeImg] = useState(null);
-    const [isModalJurnal, setIsModalJurnal] = useState(false);
     const [panduan, setPanduan] = useState(false);
     const datas = [
         {
@@ -69,9 +66,6 @@ const Dashboard = () => {
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => {
-                    setIsModalJurnal(true);
-                },
             }
         );
     };
@@ -85,7 +79,6 @@ const Dashboard = () => {
     useEffect(() => {
         let toastId;
         let toastIdFalse;
-
         if (isFirstRender.current) {
             isFirstRender.current = false;
             return;
@@ -117,10 +110,7 @@ const Dashboard = () => {
 
             <ToastContainer className={"w-96"} />
             {auth.role === "siswa" && (
-                <div
-                    // style={{ background: "rgba(34, 27, 242,0.4)" }}
-                    className="w-full flex justify-between items-center p-3"
-                >
+                <div className="w-full flex justify-between items-center p-3">
                     <span
                         onClick={() => setPanduan(true)}
                         className="inline-flex relative"
@@ -164,7 +154,7 @@ const Dashboard = () => {
                     <label className="flex items-center cursor-pointer gap-2">
                         <InputLabel
                             className="mx-4"
-                            value={"Visibility Account"}
+                            value={"Visibilitas Account"}
                         />
                         <input
                             type="checkbox"
@@ -202,159 +192,179 @@ const Dashboard = () => {
                 Halo {auth.user?.name}, Semoga Hari mu Menyenangkan 🤗
             </h1>
             {typeDb === "users" && auth.user.isVisibilityJurnal === 1 ? (
-                <div className="mt-8">
-                    {isModalJurnal ? (
-                        <div className="">
-                            <div className="overflow-x-auto">
-                                <Table
-                                    headers={[
-                                        { nama: "No" },
-                                        { nama: "Nama" },
-                                        { nama: "Keterangan" },
-                                        { nama: "Kegiatan" },
-                                        { nama: "Photo" },
-                                        { nama: "Opsi" },
-                                    ]}
-                                >
-                                    <tbody>
-                                        {jurnals?.data?.length > 0 ? (
-                                            jurnals?.data?.map((j, index) => (
-                                                <tr
-                                                    key={index}
-                                                    className={`border`}
-                                                >
-                                                    <td className="px-4 text-center py-4">
-                                                        {index + jurnals.from}
-                                                    </td>
-                                                    <td className="px-4 text-center py-4">
-                                                        {j.user?.name}
-                                                    </td>
+                new URL(window.location.href).searchParams.get("user_id") ? (
+                    <div className="mt-8">
+                        <div className="overflow-x-auto">
+                            <Table
+                                headers={[
+                                    { nama: "No" },
+                                    { nama: "Nama" },
+                                    { nama: "Keterangan" },
+                                    { nama: "Kegiatan" },
+                                    { nama: "Photo" },
+                                    { nama: "Opsi" },
+                                ]}
+                            >
+                                <tbody>
+                                    {jurnals?.data?.length > 0 ? (
+                                        jurnals?.data?.map((j, index) => (
+                                            <tr
+                                                key={index}
+                                                className={`border`}
+                                            >
+                                                <td className="px-4 text-center py-4">
+                                                    {index + jurnals.from}
+                                                </td>
+                                                <td className="px-4 text-center py-4">
+                                                    {j.user?.name}
+                                                </td>
 
-                                                    <td className="px-4 text-center py-4">
-                                                        {j.keterangan ===
-                                                            "hadir" && (
-                                                            <span className="bg-green-100 text-green-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-green-500">
-                                                                {j.keterangan}
-                                                            </span>
-                                                        )}
-                                                        {j.keterangan ===
-                                                            "sakit" && (
-                                                            <span className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-blue-500">
-                                                                {j.keterangan}
-                                                            </span>
-                                                        )}
-                                                        {j.keterangan ===
-                                                            "izin" && (
-                                                            <span className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md">
-                                                                {j.keterangan}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 text-center py-4">
-                                                        {j.kegiatan}
-                                                    </td>
-                                                    <td className="px-4 text-center py-4">
-                                                        <div className="flex justify-center items-center">
-                                                            <img
-                                                                onClick={(e) =>
-                                                                    handleResizeImg(
-                                                                        e,
-                                                                        j.id
-                                                                    )
-                                                                }
-                                                                loading="lazy"
-                                                                className="w-12 rounded-md h-12 object-cover object-center"
-                                                                src={`./storage/${j.photo}`}
-                                                                alt="jurnal Photo"
-                                                            />
-                                                            <Modal
-                                                                show={
-                                                                    resizeImg?.id ===
+                                                <td className="px-4 text-center py-4">
+                                                    {j.keterangan ===
+                                                        "hadir" && (
+                                                        <span className="bg-green-100 text-green-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-green-500">
+                                                            {j.keterangan}
+                                                        </span>
+                                                    )}
+                                                    {j.keterangan ===
+                                                        "sakit" && (
+                                                        <span className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-blue-500">
+                                                            {j.keterangan}
+                                                        </span>
+                                                    )}
+                                                    {j.keterangan ===
+                                                        "izin" && (
+                                                        <span className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md">
+                                                            {j.keterangan}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 text-center py-4">
+                                                    {j.kegiatan}
+                                                </td>
+                                                <td className="px-4 text-center py-4">
+                                                    <div className="flex justify-center items-center">
+                                                        <img
+                                                            onClick={(e) =>
+                                                                handleResizeImg(
+                                                                    e,
                                                                     j.id
-                                                                }
-                                                                onClose={() =>
-                                                                    setResizeImg(
-                                                                        null
-                                                                    )
-                                                                }
-                                                                maxWidth="md"
-                                                            >
-                                                                <div className="rounded-lg bg-white shadow-sm">
-                                                                    <TitleModal
-                                                                        icon={
-                                                                            <X />
-                                                                        }
-                                                                        title={
-                                                                            "Detail Foto"
-                                                                        }
-                                                                        onClick={() => {
-                                                                            setResizeImg(
-                                                                                null
-                                                                            );
-                                                                        }}
-                                                                    ></TitleModal>
-                                                                    <div className="p-6 flex justify-center">
-                                                                        <img
-                                                                            className="max-w-xs md:max-w-sm p-2 rounded-md h-auto object-cover object-center"
-                                                                            src={`./storage/${j.photo}`}
-                                                                            alt="jurnal"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            </Modal>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 text-center py-4">
-                                                        <div className="flex justify-center">
-                                                            <span
-                                                                onClick={(
-                                                                    e
-                                                                ) => {
-                                                                    const url =
-                                                                        new URL(
-                                                                            window.location.href
+                                                                )
+                                                            }
+                                                            loading="lazy"
+                                                            className="w-12 rounded-md h-12 object-cover object-center"
+                                                            src={`./storage/${j.photo}`}
+                                                            alt="jurnal Photo"
+                                                        />
+                                                        <Modal
+                                                            show={
+                                                                resizeImg?.id ===
+                                                                j.id
+                                                            }
+                                                            onClose={() =>
+                                                                setResizeImg(
+                                                                    null
+                                                                )
+                                                            }
+                                                            maxWidth="md"
+                                                        >
+                                                            <div className="rounded-lg bg-white shadow-sm">
+                                                                <TitleModal
+                                                                    icon={<X />}
+                                                                    title={
+                                                                        "Detail Foto"
+                                                                    }
+                                                                    onClick={() => {
+                                                                        setResizeImg(
+                                                                            null
                                                                         );
-                                                                    url.searchParams.delete(
-                                                                        "user_id"
+                                                                    }}
+                                                                ></TitleModal>
+                                                                <div className="p-6 flex justify-center">
+                                                                    <img
+                                                                        className="max-w-xs md:max-w-sm p-2 rounded-md h-auto object-cover object-center"
+                                                                        src={`./storage/${j.photo}`}
+                                                                        alt="jurnal"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </Modal>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 text-center py-4">
+                                                    <div className="flex justify-center">
+                                                        <span
+                                                            onClick={(e) => {
+                                                                window.location.href =
+                                                                    route(
+                                                                        "dashboard"
                                                                     );
-                                                                    window.history.replaceState(
-                                                                        {},
-                                                                        "",
-                                                                        url.toString()
-                                                                    );
-
-                                                                    setIsModalJurnal(
-                                                                        false
-                                                                    );
-                                                                }}
-                                                                className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md cursor-pointer"
-                                                            >
-                                                                Back
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        ) : (
-                                            <tr>
-                                                <td
-                                                    className="py-4 text-center"
-                                                    colSpan={4}
-                                                >
-                                                    Tidak Ada Jurnal Ditambahkan
+                                                            }}
+                                                            className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md cursor-pointer"
+                                                        >
+                                                            Back
+                                                        </span>
+                                                    </div>
                                                 </td>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </Table>
-                            </div>
-                            <div>
-                                {jurnals.data.length > 0 && (
-                                    <Pagination datas={jurnals}></Pagination>
-                                )}
-                            </div>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td
+                                                className="py-4 text-center"
+                                                colSpan={4}
+                                            >
+                                                Tidak Ada Jurnal Ditambahkan
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </Table>
                         </div>
-                    ) : (
+                        <div>
+                            {jurnals.data.length > 0 && (
+                                <section className="flex flex-wrap justify-center md:justify-between items-center gap-0 sm:gap-2 p-2">
+                                    <p className="text-sm font-medium text-slate-800 capitalize mt-4 md:mt-0">
+                                        menampilkan{" "}
+                                        <strong>{jurnals.from}</strong> sampai
+                                        <strong> {jurnals.to}</strong> dari{" "}
+                                        <strong>{jurnals.total}</strong> data
+                                    </p>
+                                    <div className="flex gap-1 mt-0 md:mt-4 justify-center flex-wrap p-1 mb-4">
+                                        {jurnals?.data?.length > 0 &&
+                                            jurnals.links.map((link, index) => (
+                                                <Link
+                                                    key={index}
+                                                    // disabled={!link.url}
+                                                    className={`px-3 py-1 border ${
+                                                        link.active
+                                                            ? "bg-stone-700 text-white"
+                                                            : "bg-stone-300"
+                                                    }`}
+                                                    onClick={(e) => {
+                                                        if (!link.url) {
+                                                            e.preventDefault();
+                                                        }
+                                                        window.location.href =
+                                                            link.url +
+                                                            `&user_id=${new URL(
+                                                                window.location.href
+                                                            ).searchParams.get(
+                                                                "user_id"
+                                                            )}`;
+                                                    }}
+                                                    dangerouslySetInnerHTML={{
+                                                        __html: link.label,
+                                                    }}
+                                                />
+                                            ))}
+                                    </div>
+                                </section>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="mt-8">
                         <div>
                             <p className="text-center my-4">
                                 Visibilitas akun aktif saat ini :
@@ -370,46 +380,41 @@ const Dashboard = () => {
                                     ]}
                                 >
                                     <tbody>
-                                        {userActives?.data.length > 0 ? (
-                                            userActives?.data.map(
-                                                (u, index) => (
-                                                    <tr
-                                                        key={index}
-                                                        className={`border`}
-                                                    >
-                                                        <td className="px-4 text-center py-4">
-                                                            {index +
-                                                                userActives.from}
-                                                        </td>
-                                                        <td className="px-4 text-center py-4">
-                                                            {u.name}
-                                                        </td>
-                                                        <td className="px-4 text-center py-4">
-                                                            {u.jurusan.nama}
-                                                        </td>
-                                                        <td className="px-4 text-center py-4">
-                                                            {u.datasiswa.nisn}
-                                                        </td>
-                                                        <td className="px-4 text-center py-4">
-                                                            <div className="flex justify-center">
-                                                                <span
-                                                                    onClick={(
-                                                                        e
-                                                                    ) =>
-                                                                        handleShowJurnal(
-                                                                            e,
-                                                                            u.id
-                                                                        )
-                                                                    }
-                                                                    className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 ring-blue-500 me-2 px-2.5 py-0.5 rounded-md cursor-pointer"
-                                                                >
-                                                                    Lihat
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )
-                                            )
+                                        {userActives?.length > 0 ? (
+                                            userActives?.map((u, index) => (
+                                                <tr
+                                                    key={index}
+                                                    className={`border`}
+                                                >
+                                                    <td className="px-4 text-center py-4">
+                                                        {index + 1}
+                                                    </td>
+                                                    <td className="px-4 text-center py-4">
+                                                        {u.name}
+                                                    </td>
+                                                    <td className="px-4 text-center py-4">
+                                                        {u.jurusan.nama}
+                                                    </td>
+                                                    <td className="px-4 text-center py-4">
+                                                        {u.datasiswa.nisn}
+                                                    </td>
+                                                    <td className="px-4 text-center py-4">
+                                                        <div className="flex justify-center">
+                                                            <span
+                                                                onClick={(e) =>
+                                                                    handleShowJurnal(
+                                                                        e,
+                                                                        u.id
+                                                                    )
+                                                                }
+                                                                className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 ring-blue-500 me-2 px-2.5 py-0.5 rounded-md cursor-pointer"
+                                                            >
+                                                                Lihat
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
                                         ) : (
                                             <tr>
                                                 <td
@@ -425,16 +430,9 @@ const Dashboard = () => {
                                     </tbody>
                                 </Table>
                             </div>
-                            <div>
-                                {userActives.data.length > 0 && (
-                                    <Pagination
-                                        datas={userActives}
-                                    ></Pagination>
-                                )}
-                            </div>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )
             ) : (
                 <div className="flex justify-center mt-8">
                     {auth.role === "siswa" && (

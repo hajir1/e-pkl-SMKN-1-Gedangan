@@ -66,10 +66,10 @@ class DashboardController extends Controller
         }
 
 
-
+        $page = $request->input("page", 1);
         // get users aktif and set to cache
-        $cacheKeyUsers = 'user_active' . Auth::user()->jurusan_id;
-        $users = Cache::remember($cacheKeyUsers, 3600 * 24, function () {
+        $cacheKeyUsers = 'user_active_' . Auth::user()->jurusan_id;
+        $userActives = Cache::remember($cacheKeyUsers, 3600 * 24, function () {
             return User::with(['roles', 'datasiswa', 'jurusan'])
                 ->where('isVisibilityJurnal', true)
                 ->where('jurusan_id', Auth::user()->jurusan_id)
@@ -77,39 +77,13 @@ class DashboardController extends Controller
                 ->get(); // ambil semua, cache dulu
         });
 
-       
-
-        $userActives = collect();
-        if(Auth::user()->getRoleNames()->contains("siswa")){
-            $userActives = new LengthAwarePaginator(
-            $users->forPage($page, $perPage),
-            $users->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
-        }
-
-
         // jurnals by user_id and set to cache
-        $getJurnals = Cache::remember("jurnals" . $request->user_id,3600,function() use($request){
+        $jurnals = Cache::remember("jurnals" ."_user_" . $request->input("user_id") ."_page_". $page,3600,function() use($request){
                 return Jurnal::with('user')
-                    ->where('user_id', $request->user_id)
+                    ->where('user_id', $request->input("user_id"))
                     ->latest()
-                    ->get();
+                    ->paginate(10);
             });
-
-
-        $jurnals = collect(); // default kosong
-        if ($request->filled('user_id') && Auth::user()->isVisibilityJurnal) {
-            $jurnals = new LengthAwarePaginator(
-            $getJurnals->forPage($page, $perPage),
-            $getJurnals->count(),
-            $perPage,
-            $page,
-            ['path' => request()->url(), 'query' => request()->query()]
-            );
-        }
 
 
         return Inertia::render("Dashboard",[
@@ -162,7 +136,7 @@ class DashboardController extends Controller
         $user->isVisibilityJurnal = $request->isVisibilityJurnal;
 
         $user->save();
-        Cache::forget('user_active' . Auth::user()->jurusan_id);
+        Cache::forget('user_active_' . Auth::user()->jurusan_id);
         return back()->with('success', 'Data berhasil diperbarui');
     }
 

@@ -17,7 +17,7 @@ class JurnalFactory extends Factory
     public function definition(): array
     {
         return [
-            "user_id"=> $this->faker->numberBetween(5,6),
+            "user_id"=> $this->faker->numberBetween(1,2),
             "photo"=>$this->faker->image(),
             "kegiatan"=>$this->faker->sentence(),
             "keterangan"=>$this->faker->randomElement(["hadir","sakit","izin"]),

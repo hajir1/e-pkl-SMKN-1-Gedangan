@@ -117,7 +117,7 @@ const Index = () => {
                                                     "bg-blue-200 text-blue-700 rounded-md outline-1 outline-blue-300 ring-2"
                                                 } ${
                                                     lp.status === "terima" &&
-                                                    "bg-green-200 text-green-700 rounded-md outline-1 outline-green-300 ring-2"
+                                                    "bg-green-200 text-green-700 rounded-md outline outline-1"
                                                 } ${
                                                     lp.status === "tolak" &&
                                                     "bg-red-200 text-red-700 rounded-md outline-1 ring-2 ring-red-300 outline-red-600"

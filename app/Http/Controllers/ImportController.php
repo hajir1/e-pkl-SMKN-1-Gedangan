@@ -66,7 +66,11 @@ class ImportController extends Controller
     public function exportLaporan()  {
         $user = User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa","laporan","nilai"])->where("id","=",Auth::user()->id)->first();
 
-        $pdf = Pdf::loadView("pdf.laporan",compact("user"))->setPaper("a4","potrait");
+        $jumlahJurnals = $user->jurnals->count();
+        $sakits = $user->jurnals->where("keterangan","sakit")->count();
+        $hadirs = $user->jurnals->where("keterangan","hadir")->count();
+        $izins = $user->jurnals->where("keterangan","izin")->count();
+        $pdf = Pdf::loadView("pdf.laporan",compact("user","sakits","hadirs","izins",'jumlahJurnals'))->setPaper("a4","potrait");
 
         return $pdf->stream("laporan-". $user->name . ".pdf");
 
