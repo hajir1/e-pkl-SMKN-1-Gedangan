@@ -151,7 +151,7 @@ const Dashboard = () => {
                                     src="./img/sampleLaporan.png"
                                     className="w-full h-auto"
                                     alt=""
-                                    srcset=""
+                                    srcSet=""
                                 />
                             </li>
                             <li>
@@ -234,7 +234,7 @@ const Dashboard = () => {
                                     src="./img/sampleLaporan.png"
                                     className="w-full h-auto"
                                     alt=""
-                                    srcset=""
+                                    srcSet=""
                                 />
                             </li>
                             <li>
@@ -332,7 +332,7 @@ const Dashboard = () => {
                                     src="./img/sampleLaporan.png"
                                     className="w-full h-auto"
                                     alt=""
-                                    srcset=""
+                                    srcSet=""
                                 />
                             </li>
                             <li>

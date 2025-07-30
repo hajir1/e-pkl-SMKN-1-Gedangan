@@ -19,7 +19,7 @@ class TrashJurnalController extends Controller
     public function index()
     {
           return Inertia::render("TrashJurnal/Index",[
-            "trasheds"=>Jurnal::onlyTrashed()->paginate(10)
+            "trasheds"=>Jurnal::onlyTrashed()->where("user_id","=",Auth::user()->id)->paginate(10)
         ]);
     }
 

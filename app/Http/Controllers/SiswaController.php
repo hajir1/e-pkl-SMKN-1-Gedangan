@@ -60,6 +60,9 @@ class SiswaController extends Controller
             $datas = $pagedUsers;
         }else{      
         $datas = User::query()->with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa"])
+        ->whereHas("dataSiswa", function($query) {
+            $query->where("isActive", "=", true);
+        })
         ->when(Auth::user()->getRoleNames()->contains("pembimbing_sekolah"),function($query){
             $query->where("pembimbing_sekolah_id","=",Auth::user()->id);
         })
@@ -228,14 +231,11 @@ class SiswaController extends Controller
      */
     public function destroy(string $id)
     {
-        $siswaId = User::findOrFail($id);
-        $dataSiswaId = Datasiswa::findOrFail($id);
-
+        $siswaId = User::with(["dataSiswa"])->findOrFail($id);
+        // jgn hapus total, cukup nonaktifkan saja
         if($siswaId){
-
-            $dataSiswaId->isActive =false;
-            $dataSiswaId->save();
-
+            $siswaId->dataSiswa->isActive = false;
+            $siswaId->dataSiswa->save();
             $siswaId->delete();
         }
         Cache::forget("siswa_" . $siswaId->id);

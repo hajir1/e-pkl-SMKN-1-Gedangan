@@ -74,6 +74,11 @@ return [
             'path' => storage_path('logs/delSession.log'),
             'level' => env('LOG_LEVEL', 'info'),
         ],
+        'marking' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/marking.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+        ],
 
         'daily' => [
             'driver' => 'daily',
