@@ -1,112 +1,61 @@
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
+import FormField from "@/Components/FormField";
 import PrimaryButton from "@/Components/PrimaryButton";
+import Spinner from "@/Components/Spinner";
 import TextInput from "@/Components/TextInput";
-import { Transition } from "@headlessui/react";
 import { Link, useForm, usePage } from "@inertiajs/react";
+import { CheckCircle2, Save } from "lucide-react";
 
-export default function UpdateProfileInformation({
-    mustVerifyEmail,
-    status,
-    className = "",
-}) {
+export default function UpdateProfileInformation({ mustVerifyEmail, status, className = "" }) {
+    // Sebelumnya `user` tidak didefinisikan sehingga halaman crash bila
+    // mustVerifyEmail bernilai true.
     const { auth } = usePage().props;
-    const { data, setData, patch, errors, processing, recentlySuccessful } =
-        useForm({
-            name: auth.user.name,
-            email: auth.user.email,
-        });
+    const user = auth.user;
+    const isSiswa = auth.role === "siswa";
+    const { data, setData, patch, errors, processing, recentlySuccessful } = useForm({
+        name: user.name,
+        email: user.email,
+    });
 
     const submit = (e) => {
         e.preventDefault();
-
-        patch(route("profile.update"));
+        patch(route("profile.update"), { preserveScroll: true });
     };
 
     return (
-        <section className={className}>
-            <header>
-                <h2 className="text-lg font-medium text-gray-900">
-                    Informasi Profile
-                </h2>
+        <form onSubmit={submit} noValidate className={`space-y-4 ${className}`}>
+            <FormField
+                label="Nama"
+                htmlFor="name"
+                required
+                error={errors.name}
+                help={isSiswa ? "Nama siswa mengikuti data induk sekolah dan hanya bisa diubah admin." : undefined}
+            >
+                <TextInput id="name" className="w-full" value={data.name} readOnly={isSiswa} onChange={(e) => setData("name", e.target.value)} autoComplete="name" invalid={!!errors.name} />
+            </FormField>
+            <FormField label="Email" htmlFor="email" required error={errors.email}>
+                <TextInput id="email" type="email" className="w-full" value={data.email} onChange={(e) => setData("email", e.target.value)} autoComplete="username" invalid={!!errors.email} />
+            </FormField>
 
-                <p className="mt-1 text-sm text-gray-600">
-                    Kamu Bisa Update Profile Kamu Disini
-                </p>
-            </header>
-
-            <form onSubmit={submit} className="mt-6 space-y-6">
-                {auth.role !== "siswa" && (
-                    <div>
-                        <InputLabel htmlFor="name" value="Name" />
-
-                        <TextInput
-                            id="name"
-                            className="mt-1 block w-full"
-                            value={data.name}
-                            onChange={(e) => setData("name", e.target.value)}
-                            required
-                            isFocused
-                            autoComplete="name"
-                        />
-
-                        <InputError className="mt-2" message={errors.name} />
-                    </div>
-                )}
-
-                <div>
-                    <InputLabel htmlFor="email" value="Email" />
-
-                    <TextInput
-                        id="email"
-                        type="email"
-                        className="mt-1 block w-full"
-                        value={data.email}
-                        onChange={(e) => setData("email", e.target.value)}
-                        required
-                        autoComplete="username"
-                    />
-
-                    <InputError className="mt-2" message={errors.email} />
+            {mustVerifyEmail && !user.email_verified_at && (
+                <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Email Anda belum terverifikasi.{" "}
+                    <Link href={route("verification.send")} method="post" as="button" className="font-medium underline">
+                        Kirim ulang email verifikasi
+                    </Link>
+                    {status === "verification-link-sent" && <p className="mt-1 font-medium text-emerald-700">Link verifikasi baru telah dikirim ke email Anda.</p>}
                 </div>
+            )}
 
-                {mustVerifyEmail && user.email_verified_at === null && (
-                    <div>
-                        <p className="mt-2 text-sm text-gray-800">
-                            Your email address is unverified.
-                            <Link
-                                href={route("verification.send")}
-                                method="post"
-                                as="button"
-                                className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                            >
-                                Click here to re-send the verification email.
-                            </Link>
-                        </p>
-
-                        {status === "verification-link-sent" && (
-                            <div className="mt-2 text-sm font-medium text-green-600">
-                                A new verification link has been sent to your
-                                email address.
-                            </div>
-                        )}
-                    </div>
+            <div className="flex items-center gap-3">
+                <PrimaryButton disabled={processing}>
+                    {processing ? <Spinner /> : <Save />} Simpan
+                </PrimaryButton>
+                {recentlySuccessful && (
+                    <p className="inline-flex items-center gap-1.5 text-sm text-emerald-700" role="status">
+                        <CheckCircle2 className="h-4 w-4" /> Tersimpan
+                    </p>
                 )}
-
-                <div className="flex items-center gap-4">
-                    <PrimaryButton disabled={processing}>Save</PrimaryButton>
-
-                    <Transition
-                        show={recentlySuccessful}
-                        enter="transition ease-in-out"
-                        enterFrom="opacity-0"
-                        leave="transition ease-in-out"
-                        leaveTo="opacity-0"
-                    >
-                        <p className="text-sm text-gray-600">Saved.</p>
-                    </Transition>
-                </div>
-            </form>
-        </section>
+            </div>
+        </form>
     );
 }

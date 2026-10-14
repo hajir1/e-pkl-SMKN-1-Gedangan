@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'recaptcha' => [
+        // VITE_SECRET_KEY tetap didukung agar .env lama tidak perlu diubah,
+        // tetapi sebaiknya ganti ke RECAPTCHA_SECRET_KEY: variabel berawalan
+        // VITE_ bisa ikut terbundel ke JavaScript frontend.
+        'secret' => env('RECAPTCHA_SECRET_KEY', env('VITE_SECRET_KEY')),
+    ],
+
 ];

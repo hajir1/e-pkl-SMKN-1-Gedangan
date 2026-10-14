@@ -3,91 +3,54 @@
 namespace App\Http\Controllers;
 
 use App\Models\Jurnal;
+use App\Services\AbsensiFileService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
-
-use function PHPUnit\Framework\fileExists;
 
 class TrashJurnalController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
+    public function __construct(private AbsensiFileService $files)
+    {
+    }
+
     public function index()
     {
-          return Inertia::render("TrashJurnal/Index",[
-            "trasheds"=>Jurnal::onlyTrashed()->where("user_id","=",Auth::user()->id)->paginate(10)
+        return Inertia::render('TrashJurnal/Index', [
+            'trasheds' => Jurnal::onlyTrashed()->where('user_id', '=', Auth::id())->latest('deleted_at')->paginate(10),
         ]);
     }
 
     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
+     * Pulihkan absensi dari Sampah.
+     *
+     * Index unik (user_id, minggu_mulai) ikut menghitung data di Sampah,
+     * jadi absensi yang dipulihkan tidak mungkin bentrok dengan absensi lain
+     * pada minggu yang sama. Pengecekan sebelumnya memakai tanggal hari ini,
+     * bukan tanggal absensi yang dipulihkan.
      */
     public function update(Request $request, string $id)
     {
-        $today = Carbon::today();
+        $jurnal = Jurnal::onlyTrashed()->findOrFail($id);
+        Gate::authorize('restore', $jurnal);
 
-        $sudahAda = Jurnal::where("user_id","=",Auth::user()->id)->whereDate("created_at","=",$today)->exists();
+        $jurnal->restore();
+        Jurnal::flushCacheFor($jurnal->user_id);
 
-        if($sudahAda){
-            return redirect()->back()->with("error","Mohon Maaf, Jurnal Pada Tanggal $today Telah Ada");
-        }
-        Jurnal::withTrashed()->findOrFail($id)->restore();
-        return redirect()->back()->with("success","Sukses Me restore Jurnal");
+        return redirect()->back()->with('success', 'Sukses Me restore Jurnal');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(string $id)
     {
-        $jrnlId = Jurnal::withTrashed()->findOrFail($id);
-        if($jrnlId->photo){
-            $backupPath = env("BACKUP_PHOTOS") . $jrnlId->photo;
+        $jurnal = Jurnal::onlyTrashed()->findOrFail($id);
+        Gate::authorize('forceDelete', $jurnal);
 
-            if(fileExists(storage_path("app/public/".$jrnlId->photo))){
-                File::delete(storage_path("app/public/".$jrnlId->photo));
-            }
-            if(fileExists($backupPath)){
-                File::delete($backupPath);
-            }
-        }
-        $jrnlId->forceDelete();
+        $this->files->deletePhoto($jurnal->photo);
+        $this->files->deletePdf($jurnal->file_pdf);
+        $jurnal->forceDelete();
+        Jurnal::flushCacheFor($jurnal->user_id);
+
         return back()->with('success', 'Data dihapus permanen.');
     }
 }

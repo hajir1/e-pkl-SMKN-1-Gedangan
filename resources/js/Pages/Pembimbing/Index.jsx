@@ -1,262 +1,168 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import Pagination from "@/Components/Pagination";
-import Swal from "sweetalert2";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
+import Badge from "@/Components/Badge";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
 import Filter from "@/Components/Filter";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
-import TitleModal from "@/Components/TitleModal";
-import InputLabel from "@/Components/InputLabel";
-import Table from "@/Components/Table";
 import { OptionSorting } from "@/Components/Option";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
-    const { pembimbings, filters, jurusans, tahunAjarans } = usePage().props;
-    const [sortModal, setSortModal] = useState(false);
-    const { data: dataSearch, setData: setDataSearch } = useForm({
-        search: filters?.search ?? "",
-        sort_by: filters?.sort_by ?? "",
-        sort_order: filters?.sort_order ?? "",
-        tahunAjaran: filters?.tahunAjaran ?? "",
-        jurusan: filters?.jurusan ?? "",
-    });
-    const handleDelete = (e, id, nama) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus User ${nama}`;
-        const cb = () =>
-            router.delete(route("pembimbing.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleSearchChange = (e) => {
-        e.preventDefault();
-        const { name, value } = e.target;
-        const update = {
-            ...dataSearch,
-            [name]: value,
-        };
-        setDataSearch(update);
-        const params = {};
-        if (update.search !== "") params.search = update.search;
-        if (update.sort_by !== "") params.sort_by = update.sort_by;
-        if (update.sort_by !== "" && update.sort_order !== "")
-            params.sort_order = update.sort_order;
-        if (update.jurusan !== "") params.jurusan = update.jurusan;
-        if (update.tahunAjaran !== "") params.tahunAjaran = update.tahunAjaran;
+import Pagination from "@/Components/Pagination";
+import PrimaryButton from "@/Components/PrimaryButton";
+import SecondaryButton from "@/Components/SecondaryButton";
+import Select from "@/Components/Select";
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { roleLabel } from "@/Helpers/format";
+import { useListFilter } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { Pencil, Plus, Trash2, UserCog } from "lucide-react";
+import { useState } from "react";
 
-        router.get(route("pembimbing.index"), params, {
-            preserveState: true,
-            preserveScroll: true,
-        });
-    };
+export default function Index() {
+    const { pembimbings, filters, jurusans = [], tahunAjarans = [] } = usePage().props;
+    const [sortModal, setSortModal] = useState(false);
+    const { dataSearch, handleSearchChange, resetFilter, activeCount } = useListFilter("pembimbing.index", filters, ["tahunAjaran", "jurusan"]);
+    const rows = pembimbings?.data ?? [];
+
+    const handleDelete = (pb) =>
+        AlertConfirm(
+            `Akun pembimbing ${pb.name} akan dihapus. Siswa dan tempat PKL yang dibimbingnya akan kehilangan pembimbing. Lanjutkan?`,
+            "warning",
+            () => router.delete(route("pembimbing.destroy", pb.id), { preserveScroll: true }),
+            "Ya, Hapus"
+        );
+
     return (
         <AuthenticatedLayout>
             <Head title="Pembimbing" />
-            <ToastContainer className={`w-96`} />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Pembimbing" quote="Kelola akun pembimbing sekolah dan pembimbing DU/DI.">
+                    <Link
+                        href={route("pembimbing.create")}
+                        className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                    >
+                        <Plus className="h-4 w-4" /> Tambah Pembimbing
+                    </Link>
+                </TitlePage>
 
-            <TitlePage
-                nameRoute={"Tambah Pembimbing"}
-                quote={
-                    "list pembimbing sistem rekap kegiatan pkl secara digital"
-                }
-                title={"Pembimbing"}
-                onClick={() =>
-                    (window.location.href = route("pembimbing.create"))
-                }
-            ></TitlePage>
-            <Filter
-                sortModal={sortModal}
-                value={dataSearch.search}
-                onChange={handleSearchChange}
-                setSortModal={setSortModal}
-            />
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+                <Card className="overflow-hidden">
+                    <Filter
+                        sortModal={sortModal}
+                        setSortModal={setSortModal}
+                        value={dataSearch.search}
+                        onChange={handleSearchChange}
+                        activeCount={activeCount}
+                        placeholder="Cari nama, email, kontak, jurusan..."
+                    />
                     <Table
                         headers={[
-                            { nama: "#" },
-                            { nama: "Nama" },
-                            { nama: "Email" },
+                            { nama: "#", className: "w-12" },
+                            { nama: "Pembimbing" },
+                            { nama: "Peran" },
                             { nama: "Kontak" },
-                            { nama: "Jurusan" },
-                            { nama: "Tahun Ajaran" },
-                            { nama: "Role" },
-                            { nama: "Opsi" },
+                            { nama: "Jurusan / TA" },
+                            { nama: "Aksi", className: "text-right" },
                         ]}
+                        minWidth="min-w-[760px]"
                     >
                         <tbody>
-                            {pembimbings?.data.length > 0 ? (
-                                pembimbings?.data.map((pb, index) => (
-                                    <tr
-                                        key={index}
-                                        className="bg-white border-b  border-gray-200"
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + pembimbings?.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {pb.name}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {pb.email}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {pb.kontak === ""
-                                                ? "Belum Diisi"
-                                                : pb.kontak}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {pb.jurusan?.nama
-                                                ? pb.jurusan?.nama
-                                                : "Belum Diisi"}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {pb.tahun_ajaran?.tahun
-                                                ? pb.tahun_ajaran?.tahun
-                                                : "Belum Diisi"}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {pb.roles[0]?.name ===
-                                            "pembimbing_sekolah"
-                                                ? pb.roles[0]?.name?.replace(
-                                                      /_/g,
-                                                      " "
-                                                  )
-                                                : `${pb.roles[0]?.name?.replace(
-                                                      /_/g,
-                                                      " "
-                                                  )}- ${
-                                                      pb.tempat_yang_dibimbing
-                                                          ?.nama ??
-                                                      "Belum diisi"
-                                                  }`}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4 ">
-                                            <div className="flex justify-center gap-2">
-                                                <div
-                                                    onClick={(e) =>
-                                                        (window.location.href =
-                                                            route(
-                                                                "pembimbing.edit",
-                                                                pb.id
-                                                            ))
-                                                    }
-                                                    className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
-                                                >
-                                                    <Edit />
+                            {rows.length > 0 ? (
+                                rows.map((pb, index) => {
+                                    const role = pb.roles?.[0]?.name;
+                                    return (
+                                        <Tr key={pb.id}>
+                                            <Td className="text-slate-500">{index + (pembimbings.from ?? 1)}</Td>
+                                            <Td>
+                                                <p className="font-medium text-slate-900">{pb.name}</p>
+                                                <p className="text-xs text-slate-500">{pb.email}</p>
+                                            </Td>
+                                            <Td>
+                                                <Badge tone={role === "pembimbing_pt" ? "violet" : "sky"}>{roleLabel(role)}</Badge>
+                                                {role === "pembimbing_pt" && (
+                                                    <p className="mt-1 text-xs text-slate-500">
+                                                        {pb.tempat_yang_dibimbing?.nama ?? "Belum membimbing tempat"}
+                                                    </p>
+                                                )}
+                                            </Td>
+                                            <Td className="whitespace-nowrap">{pb.kontak || <span className="text-slate-400">Belum diisi</span>}</Td>
+                                            <Td>
+                                                <p>{pb.jurusan?.nama ?? <span className="text-slate-400">-</span>}</p>
+                                                <p className="text-xs text-slate-500">{pb.tahun_ajaran?.tahun ?? "-"}</p>
+                                            </Td>
+                                            <Td>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <IconButton label="Ubah pembimbing" variant="primary" href={route("pembimbing.edit", pb.id)}>
+                                                        <Pencil />
+                                                    </IconButton>
+                                                    <IconButton label="Hapus pembimbing" variant="danger" onClick={() => handleDelete(pb)}>
+                                                        <Trash2 />
+                                                    </IconButton>
                                                 </div>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(
-                                                            e,
-                                                            pb.id,
-                                                            pb.name
-                                                        )
-                                                    }
-                                                    className="font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer"
-                                                >
-                                                    <Trash />
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                            </Td>
+                                        </Tr>
+                                    );
+                                })
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Pembimbing Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={6}>
+                                    {activeCount > 0 || filters?.search ? (
+                                        <EmptyState
+                                            title="Tidak ada pembimbing yang cocok"
+                                            description="Coba ubah kata kunci atau atur ulang filter."
+                                            action={<SecondaryButton onClick={resetFilter}>Atur ulang filter</SecondaryButton>}
+                                        />
+                                    ) : (
+                                        <EmptyState icon={<UserCog />} title="Belum ada pembimbing" description="Tambahkan pembimbing sekolah atau DU/DI." />
+                                    )}
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {pembimbings?.data.length > 0 && (
-                    <Pagination datas={pembimbings}></Pagination>
-                )}
+                    <Pagination datas={pembimbings} />
+                </Card>
             </div>
-            <Modal show={sortModal} onClose={() => setSortModal(!sortModal)}>
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Filter Dan Sorting Pembimbing"}
-                        onClick={() => {
-                            setSortModal(!sortModal);
-                        }}
-                    ></TitleModal>
+
+            <Modal show={sortModal} onClose={() => setSortModal(false)} maxWidth="lg">
+                <TitleModal title="Filter & Urutkan Pembimbing" description="Perubahan langsung diterapkan pada tabel." onClick={() => setSortModal(false)} />
+                <ModalBody className="space-y-5">
                     <OptionSorting
                         dataSearch={dataSearch}
                         handleSearchChange={handleSearchChange}
                         datas={[
-                            { name: "Default", value: "" },
+                            { name: "Bawaan (terbaru)", value: "" },
                             { name: "Nama", value: "name" },
                             { name: "Email", value: "email" },
-                            { name: "Ho Hp", value: "kontak" },
+                            { name: "No. HP", value: "kontak" },
                             { name: "Jurusan", value: "jurusan_id" },
-                            { name: "Tahun Ajaran", value: "tahunAjaran_id" },
+                            { name: "Tahun ajaran", value: "tahunAjaran_id" },
                         ]}
                     />
-                    <div className="p-4 md:p-5">
-                        <h3 className="text-lg font-semibold text-gray-900 ">
-                            Filter Data Pembimbing
-                        </h3>
-                        <div className="grid gap-4 grid-cols-1">
-                            <div className="">
-                                <InputLabel value={"Tahun Ajaran"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.tahunAjaran}
-                                    id="tahunAjaran"
-                                    name="tahunAjaran"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    {tahunAjarans.length > 0 &&
-                                        tahunAjarans.map((ta) => (
-                                            <option key={ta.id} value={ta.id}>
-                                                {ta.tahun}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
-                            <div className="">
-                                <InputLabel value={"Jurusan"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.jurusan}
-                                    id="jurusan"
-                                    name="jurusan"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    {jurusans.length > 0 &&
-                                        jurusans.map((jurusan) => (
-                                            <option
-                                                key={jurusan.id}
-                                                value={jurusan.id}
-                                            >
-                                                {jurusan.nama}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField label="Tahun ajaran" htmlFor="f-ta">
+                            <Select id="f-ta" name="tahunAjaran" value={dataSearch.tahunAjaran} onChange={handleSearchChange}>
+                                <option value="">Semua</option>
+                                {tahunAjarans.map((ta) => (
+                                    <option key={ta.id} value={ta.id}>{ta.tahun}</option>
+                                ))}
+                            </Select>
+                        </FormField>
+                        <FormField label="Jurusan" htmlFor="f-jurusan">
+                            <Select id="f-jurusan" name="jurusan" value={dataSearch.jurusan} onChange={handleSearchChange}>
+                                <option value="">Semua</option>
+                                {jurusans.map((j) => (
+                                    <option key={j.id} value={j.id}>{j.nama}</option>
+                                ))}
+                            </Select>
+                        </FormField>
                     </div>
-                </div>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={resetFilter}>Atur ulang</SecondaryButton>
+                    <PrimaryButton type="button" onClick={() => setSortModal(false)}>Selesai</PrimaryButton>
+                </ModalFooter>
             </Modal>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

@@ -1,221 +1,173 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
-import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { ArchiveRestore, Edit, Plus, Trash, X } from "lucide-react";
+import { KeteranganBadge, StatusBadge } from "@/Components/Badge";
+import Callout from "@/Components/Callout";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import IconButton from "@/Components/IconButton";
+import ImageViewer from "@/Components/ImageViewer";
 import Pagination from "@/Components/Pagination";
-import TitleModal from "@/Components/TitleModal";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import {
+    formatPeriode,
+    formatTanggal,
+    formatTanggalWaktu,
+    storageUrl,
+} from "@/Helpers/format";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { ArchiveRestore, ArrowLeft, FileText, Trash2 } from "lucide-react";
+import { useState } from "react";
+
+const periodeJurnal = (j) =>
+    j.minggu_mulai
+        ? formatPeriode(j.minggu_mulai, j.minggu_selesai)
+        : formatTanggal(j.created_at);
+
+export default function Index() {
     const { trasheds } = usePage().props;
-    const [resizeImg, setResizeImg] = useState(null);
-    const handleDelete = (e, id) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Jurnal Secara Permanent`;
-        const cb = () =>
-            router.delete(route("trashJurnal.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleRestore = (e, id) => {
-        e.preventDefault();
+    const [prosesId, setProsesId] = useState(null);
+    const rows = trasheds?.data ?? [];
+
+    const handleRestore = (jurnal) => {
+        setProsesId(jurnal.id);
         router.put(
-            route("trashJurnal.update", id),
+            route("trashJurnal.update", jurnal.id),
             {},
-            {
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth.flash?.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                    }
-                },
-            }
+            { preserveScroll: true, onFinish: () => setProsesId(null) }
         );
     };
-    const handleResizeImg = (e, id) => {
-        e.preventDefault();
-        const filtered = jurnals.data.find((j) => j.id === id);
-        if (filtered) {
-            setResizeImg(filtered);
-        }
+
+    const handleDelete = (jurnal) => {
+        AlertConfirm(
+            `Absensi periode ${periodeJurnal(jurnal)} beserta file PDF dan fotonya akan dihapus permanen dan tidak bisa dipulihkan.`,
+            "warning",
+            () => {
+                setProsesId(jurnal.id);
+                router.delete(route("trashJurnal.destroy", jurnal.id), {
+                    preserveScroll: true,
+                    onFinish: () => setProsesId(null),
+                });
+            },
+            "Ya, Hapus Permanen"
+        );
     };
+
     return (
         <AuthenticatedLayout>
-            <Head title="trash Jurnal" />
-            <ToastContainer className={`w-96`} />
+            <Head title="Sampah Absensi" />
+            <div className="space-y-6">
+                <TitlePage
+                    eyebrow="Absensi PKL"
+                    title="Sampah Absensi"
+                    quote="Absensi yang Anda hapus tersimpan di sini. Pulihkan bila terhapus tidak sengaja, atau hapus permanen."
+                >
+                    <Link
+                        href={route("jurnal.index")}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                        <ArrowLeft className="h-4 w-4" /> Kembali ke Absensi
+                    </Link>
+                </TitlePage>
 
-            <TitlePage
-                quote={"list jurnal yang baru saja di hapus bisa di restore disini"}
-                title={"Jurnal Dihapus"}
-            ></TitlePage>
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+                <Callout tone="info">
+                    Satu minggu hanya boleh memiliki satu absensi, termasuk yang
+                    ada di Sampah. Untuk mengirim ulang absensi pada minggu yang
+                    sama, pulihkan atau hapus permanen absensi tersebut.
+                </Callout>
+
+                <Card className="overflow-hidden">
                     <Table
                         headers={[
-                            { nama: "#" },
-                            { nama: "Dibuat Pada" },
-                            { nama: "Kegiatan" },
+                            { nama: "#", className: "w-12" },
+                            { nama: "Periode" },
                             { nama: "Keterangan" },
-                            { nama: "Photo" },
-                            { nama: "Dihapus Pada" },
-                            { nama: "Opsi" },
+                            { nama: "Kegiatan" },
+                            { nama: "Bukti" },
+                            { nama: "Status" },
+                            { nama: "Dihapus" },
+                            { nama: "Aksi", className: "text-right" },
                         ]}
+                        minWidth="min-w-[820px]"
                     >
                         <tbody>
-                            {trasheds.data.length > 0 ? (
-                                trasheds.data.map((ts, index) => (
-                                    <tr key={index} className={`border`}>
-                                        <td className="px-4 text-center py-4">
-                                            {index + trasheds.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {(() => {
-                                                const date = new Date(
-                                                    ts.created_at
-                                                );
-
-                                                const day = String(
-                                                    date.getDate()
-                                                ).padStart(2, "0");
-                                                const month = String(
-                                                    date.getMonth() + 1
-                                                ).padStart(2, "0");
-                                                const year = date.getFullYear();
-                                                return `${day}-${month}-${year}`;
-                                            })()}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {ts.kegiatan}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {ts.keterangan === "hadir" && (
-                                                <span className="bg-green-100 text-green-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-green-500">
-                                                    {ts.keterangan}
-                                                </span>
-                                            )}
-                                            {ts.keterangan === "sakit" && (
-                                                <span className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-blue-500">
-                                                    {ts.keterangan}
-                                                </span>
-                                            )}
-                                            {ts.keterangan === "izin" && (
-                                                <span className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md">
-                                                    {ts.keterangan}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center items-center">
-                                                <img
-                                                    onClick={(e) =>
-                                                        handleResizeImg(
-                                                            e,
-                                                            jurnal.id
-                                                        )
-                                                    }
-                                                    loading="lazy"
-                                                    className="w-12 rounded-md h-12 object-cover object-center"
-                                                    src={`./storage/${ts.photo}`}
-                                                    alt="jurnal Photo"
-                                                />
-                                                <Modal
-                                                    show={
-                                                        resizeImg?.id === ts.id
-                                                    }
-                                                    onClose={() =>
-                                                        setResizeImg(null)
-                                                    }
-                                                    maxWidth="md"
-                                                >
-                                                    <div className="rounded-lg bg-white shadow-sm">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={
-                                                                "Detail Foto"
-                                                            }
-                                                            onClick={() => {
-                                                                setResizeImg(
-                                                                    null
-                                                                );
-                                                            }}
-                                                        ></TitleModal>
-                                                        <div className="p-6 flex justify-center">
-                                                            <img
-                                                                className="max-w-xs md:max-w-sm p-2 rounded-md h-auto object-cover object-center"
-                                                                src={`./storage/${ts.photo}`}
-                                                                alt=""
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </Modal>
+                            {rows.length > 0 ? (
+                                rows.map((ts, index) => (
+                                    <Tr key={ts.id}>
+                                        <Td className="text-slate-500">
+                                            {index + (trasheds.from ?? 1)}
+                                        </Td>
+                                        <Td className="whitespace-nowrap font-medium text-slate-900">
+                                            {periodeJurnal(ts)}
+                                        </Td>
+                                        <Td>
+                                            <KeteranganBadge value={ts.keterangan} />
+                                        </Td>
+                                        <Td className="max-w-xs">
+                                            <p className="line-clamp-2" title={ts.kegiatan}>
+                                                {ts.kegiatan}
+                                            </p>
+                                        </Td>
+                                        <Td>
+                                            <div className="flex items-center gap-2">
+                                                {ts.file_pdf ? (
+                                                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                                                        <FileText className="h-3.5 w-3.5" /> PDF
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400">Tanpa PDF</span>
+                                                )}
+                                                {ts.photo && (
+                                                    <ImageViewer
+                                                        src={storageUrl(ts.photo)}
+                                                        alt="Foto kegiatan"
+                                                        className="h-9 w-9"
+                                                    />
+                                                )}
                                             </div>
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {(() => {
-                                                const date = new Date(
-                                                    ts.deleted_at
-                                                );
-                                                const day = String(
-                                                    date.getDate()
-                                                ).padStart(2, "0");
-                                                const month = String(
-                                                    date.getMonth() + 1
-                                                ).padStart(2, "0");
-                                                const years =
-                                                    date.getFullYear();
-                                                return `${day}-${month}-${years}`;
-                                            })()}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center item-center gap-2">
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleRestore(e, ts.id)
-                                                    }
-                                                    className={`font-medium text-blue-700 cursor-pointer`}
+                                        </Td>
+                                        <Td>
+                                            <StatusBadge status={ts.status_verifikasi} mark={ts.mark} />
+                                        </Td>
+                                        <Td className="whitespace-nowrap text-slate-500">
+                                            {formatTanggalWaktu(ts.deleted_at)}
+                                        </Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <IconButton
+                                                    label="Pulihkan absensi"
+                                                    variant="primary"
+                                                    disabled={prosesId === ts.id}
+                                                    onClick={() => handleRestore(ts)}
                                                 >
                                                     <ArchiveRestore />
-                                                </div>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(e, ts.id)
-                                                    }
-                                                    className={`font-medium text-red-700 cursor-pointer`}
+                                                </IconButton>
+                                                <IconButton
+                                                    label="Hapus permanen"
+                                                    variant="danger"
+                                                    disabled={prosesId === ts.id}
+                                                    onClick={() => handleDelete(ts)}
                                                 >
-                                                    <Trash />
-                                                </div>
+                                                    <Trash2 />
+                                                </IconButton>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Jurnal Di Hapus
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={8}>
+                                    <EmptyState
+                                        icon={<Trash2 />}
+                                        title="Sampah kosong"
+                                        description="Absensi yang Anda hapus akan muncul di sini."
+                                    />
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {trasheds.data.length > 0 && (
-                    <Pagination datas={trasheds}></Pagination>
-                )}
+                    <Pagination datas={trasheds} />
+                </Card>
             </div>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

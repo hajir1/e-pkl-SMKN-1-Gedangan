@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\Datasiswa;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
@@ -33,8 +34,6 @@ class AktivasiController extends Controller
      */
     public function store(Request $request)
     {
-        $dataId = Datasiswa::where("nisn",$request->input("nisn"))->first();
-        
         $request->validate([
             "nisn"=>["string","required","min:9","max:20",Rule::exists("datasiswas","nisn")]
         ],[
@@ -44,11 +43,17 @@ class AktivasiController extends Controller
             "nisn.exists"=>"Nomor Aktivasi Tidak Ditemukan",
         ]);
 
+        $dataId = Datasiswa::where("nisn",$request->input("nisn"))->first();
+
         if(!$dataId){
             return redirect()->route("aktivasi")->with("error","Nomor Aktivasi Tidak Ditemukan");
-        }else{
-            $dataId->isActive = true;
-            $dataId->save();
+        }
+
+        // isActive tidak lagi diubah di sini. Sebelumnya NISN langsung ditandai
+        // aktif walau registrasi tidak diselesaikan, sehingga NISN itu hilang
+        // dari pilihan admin. Penandaan dipindah ke RegisteredUserController@store.
+        if(User::where("nisn_id","=",$dataId->id)->exists()){
+            return redirect()->route("login")->with("error","Nomor Aktivasi telah di registrasi. Silahkan Login");
         }
 
         return redirect()->route("register.edit",[

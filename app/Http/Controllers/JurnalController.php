@@ -2,222 +2,252 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\FileConversionException;
+use App\Http\Requests\Jurnal\StoreJurnalRequest;
+use App\Http\Requests\Jurnal\UpdateJurnalRequest;
+use App\Http\Requests\Jurnal\VerifikasiJurnalRequest;
 use App\Models\Jurnal;
-use Carbon\Carbon;
+use App\Services\AbsensiFileService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-
-use function PHPUnit\Framework\fileExists;
 
 class JurnalController extends Controller
 {
+    public function __construct(private AbsensiFileService $files)
+    {
+    }
+
     /**
-     * Display a listing of the resource.
+     * Daftar absensi sesuai hak akses role.
      */
     public function index(Request $request)
     {
-        $jurnal = Jurnal::query()->with("user")
-        ->when(Auth::user()->getRoleNames()->contains("siswa"),function($query){
-            $query->where("user_id",'=', Auth::user()->id);
-        })
-       ->when(Auth::user()->getRoleNames()->contains("pembimbing_pt"), function ($query) {
-        $query->whereHas('user.tempat', function ($q2) {
-           
-            $q2->where('pembimbing_id', Auth::id());
-        });
-        })
-       ->when(Auth::user()->getRoleNames()->contains("pembimbing_sekolah"), function ($query) {
-            $query->whereHas('user.pbSkl', function ($q2) {
-                $q2->where('id', Auth::id());
-            });
-        })
-        ->when($request->filled("marking"),function($query) use($request){
-            $query->where("mark","=",filter_var($request->input("marking"),FILTER_VALIDATE_BOOLEAN));
-        })
-        ->when($request->filled("keterangan"),function($query)use($request){
-            $query->where("jurnals.keterangan","=",$request->input("keterangan"));
-        })
-        ->when($request->filled("start_date") && !$request->filled("end_date"),function($query)use($request){
-            $query->whereDate("jurnals.created_at","=",$request->start_date);
-        })
-        ->when($request->filled(["start_date","end_date"]),function($query)use($request){
-            $query->whereBetween("jurnals.created_at",[$request->start_date, $request->end_date]);
-        })
-        ->when($request->filled("search"),function($query)use($request){
-           $query->where(function($q) use($request) {
-             $q->whereHas("user",function($q2)use($request){
-                $q2->where("name","like","{$request->search}%");
-            })
-            ->orWhere("jurnals.keterangan","like","{$request->search}%")
-            ->orWhere("jurnals.kegiatan","like","{$request->search}%");
-           });
-        })
-        ->when($request->input("sort_by") === "nama",function($query)use($request){
-                $query->join("users", "users.id","=","jurnals.user_id")
-                ->orderBy("users.name",$request->input("sort_order","desc"))
-                ->select("jurnals.*");
-        })
-        ->when($request->input("sort_by") !== "nama",function($query)use($request){
-                $query->orderBy($request->input("sort_by","jurnals.created_at"),$request->input("sort_order","desc"));
-        })
-        ->latest()->paginate(10)->withQueryString();
-        
+        $user = Auth::user();
 
+        $jurnal = Jurnal::query()->with(['user', 'verifikator:id,name'])
+            ->visibleTo($user)
+            ->filter($request)
+            ->paginate(10)->withQueryString();
 
+        $awalMinggu = Jurnal::awalMinggu();
+        $mingguIni = $user->hasRole('siswa')
+            ? Jurnal::withTrashed()->where('user_id', $user->id)->whereDate('minggu_mulai', $awalMinggu->toDateString())->first()
+            : null;
 
-        return Inertia::render("Jurnal/Index",[
-            "jurnals"=>$jurnal,
-            "user"=> Jurnal::with(["user.tempat.user","user.pbSkl"])->where("user_id","=",Auth::user()->id)->first(),
-            "filters"=> $request->only(["search","sort_by","sort_order","tahunAjaran","start_date","end_date","keterangan","marking"])
+        return Inertia::render('Jurnal/Index', [
+            'jurnals' => $jurnal,
+            'user' => Jurnal::with(['user.tempat.user', 'user.pbSkl'])->where('user_id', '=', $user->id)->first(),
+            'filters' => $request->only(['search', 'sort_by', 'sort_order', 'tahunAjaran', 'start_date', 'end_date', 'keterangan', 'marking', 'status']),
+            // Info tambahan untuk frontend: periode minggu berjalan dan
+            // absensi minggu ini (null bila siswa belum mengirim).
+            'periodeMinggu' => [
+                'mulai' => $awalMinggu->toDateString(),
+                'selesai' => $awalMinggu->copy()->addDays(6)->toDateString(),
+            ],
+            'absensiMingguIni' => $mingguIni,
+            'sudahAbsenMingguIni' => (bool) $mingguIni,
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        //
+        return redirect()->route('jurnal.index');
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Siswa mengirim absensi mingguan (PDF wajib, foto opsional -> WebP).
      */
-    public function store(Request $request)
+    public function store(StoreJurnalRequest $request)
     {
+        $user = $request->user();
+        $awalMinggu = Jurnal::awalMinggu();
 
-        $today = Carbon::today();
+        $existing = Jurnal::withTrashed()
+            ->where('user_id', $user->id)
+            ->whereDate('minggu_mulai', $awalMinggu->toDateString())
+            ->first();
 
-        $sudahAda = Jurnal::where("user_id","=",Auth::user()->id)->whereDate("created_at","=",$today)->exists();
+        if ($existing) {
+            $pesan = $existing->trashed()
+                ? 'Absensi minggu ini ada di Sampah. Pulihkan atau hapus permanen terlebih dahulu.'
+                : 'Mohon Maaf, Absensi Hanya Bisa Dikirim 1x Setiap Minggu ('.$awalMinggu->format('d-m-Y').' s/d '.$awalMinggu->copy()->addDays(6)->format('d-m-Y').')';
 
-        if($sudahAda){
-            return redirect()->back()->with("error","Mohon Maaf, Jurnal Hanya Bisa Diisi 1x setiap Hari");
+            return redirect()->back()->with('error', $pesan);
         }
 
-        $validate = $request->validate([
-            "keterangan"=>"required",
-            "kegiatan"=>"required|max:150",
-            "photo"=>"required|file|max:2400|mimes:jpg,jpeg,avif,png"
-        ],[
-            "photo.max"=>"File Gambar Maksimal 2400 Kb (2,4 mb)",
-            "kegiatan.max"=>"Kegiatan Wajib Diisi 1 - 150 karakter Huruf",
-            "photo.mimes"=>"Gambar harus Bertipe Jpg,Jpeg,Avif,Png"
-        ]);
+        $pdfPath = null;
+        $photoPath = null;
 
-        if($request->hasFile("photo")){
-            // upload to storage
-            $sourcePath = $request->file('photo')->store('jurnals/'.now()->format("Y")."-".Auth::user()->jurusan->nama."-".Auth::user()->name."/" , 'public');
-            
-
-            $backupPath = env("BACKUP_PHOTOS") .  $sourcePath;
-
-            // buat folder jika belum ada
-            if(!file_exists(dirname($backupPath))) {
-                mkdir(dirname($backupPath), 0777, true);
+        try {
+            $pdfPath = $this->files->storePdf($request->file('file_pdf'), $user);
+            if ($request->hasFile('photo')) {
+                $photoPath = $this->files->storePhotoAsWebp($request->file('photo'), $user);
             }
-            // Simpan juga ke folder backup
-            if(!copy(storage_path("app/public/".$sourcePath), $backupPath)){
-                return Inertia::render("Jurnal/Index")->with("error","Gambar gagal disimpan");
-            };
-            $validate["photo"] = $sourcePath ?? null;
-        }
-        Jurnal::create(
-            [
-                "user_id"=>Auth::user()->id,
-                "keterangan"=>$validate["keterangan"],
-                "kegiatan"=>$validate["kegiatan"],
-                "photo"=>$validate["photo"],
+
+            Jurnal::create([
+                'user_id' => $user->id,
+                'minggu_mulai' => $awalMinggu->toDateString(),
+                'keterangan' => $request->validated('keterangan'),
+                'kegiatan' => $request->validated('kegiatan'),
+                'file_pdf' => $pdfPath,
+                'photo' => $photoPath,
             ]);
-        Cache::forget("jurnals". Auth::user()->id);
-        return redirect()->back()->with("success","Sukses Menambah Jurnal");
+        } catch (UniqueConstraintViolationException) {
+            // Dua request bersamaan: index unik (user_id, minggu_mulai) menolak yang kedua.
+            $this->files->deletePdf($pdfPath);
+            $this->files->deletePhoto($photoPath);
+
+            return redirect()->back()->with('error', 'Mohon Maaf, Absensi Hanya Bisa Dikirim 1x Setiap Minggu');
+        } catch (FileConversionException $e) {
+            $this->files->deletePdf($pdfPath);
+            $this->files->deletePhoto($photoPath);
+
+            return redirect()->back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            $this->files->deletePdf($pdfPath);
+            $this->files->deletePhoto($photoPath);
+            Log::error('Gagal menyimpan absensi: '.$e->getMessage(), ['user_id' => $user->id]);
+
+            return redirect()->back()->with('error', 'Absensi gagal disimpan, coba beberapa saat lagi.');
+        }
+
+        Jurnal::flushCacheFor($user->id);
+
+        return redirect()->back()->with('success', 'Sukses Mengirim Absensi Minggu Ini');
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(string $id)
     {
-       
+        return redirect()->route('jurnal.index');
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(string $id)
     {
-        //
+        return redirect()->route('jurnal.index');
     }
 
     /**
-     * Update the specified resource in storage.
+     * Siswa memperbaiki absensinya selama belum disetujui. Absensi yang
+     * ditolak otomatis kembali berstatus pending setelah diperbaiki.
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateJurnalRequest $request, string $id)
     {
-        $validate = $request->validate([
-            "keterangan"=>"required",
-            "kegiatan"=>"required|max:150",
-            "photo"=>"nullable"
-        ],[
-            "photo.max"=>"File Gambar Maksimal 2400 Kb (2,4 mb)",
-            "kegiatan.max"=>"Kegiatan Wajib Diisi 1 - 150 karakter Huruf",
-            "photo.mimes"=>"Gambar harus Bertipe Jpg,Jpeg,Avif,Png"
-        ]);
+        $jurnal = Jurnal::with('user.tempat')->findOrFail($id);
+        Gate::authorize('update', $jurnal);
 
-        $jrnlId = Jurnal::findOrFail($id);
+        $user = $request->user();
+        $newPdf = null;
+        $newPhoto = null;
 
-            if($request->hasFile("photo")){
-                if($jrnlId->photo){
-                    $backupPath = env("BACKUP_PHOTOS"). $jrnlId->photo;
-
-                // hapus file jika ada
-                if(fileExists(storage_path("app/public/".$jrnlId->photo))){
-                    File::delete(storage_path("app/public/".$jrnlId->photo));
-                }
-
-                if(fileExists($backupPath)){
-                    File::delete($backupPath);
-                }
+        try {
+            if ($request->hasFile('file_pdf')) {
+                $newPdf = $this->files->storePdf($request->file('file_pdf'), $user);
             }
-
-            // simpan ke folder public
-            $sourcePath = $request->file('photo')->store('jurnals/'.now()->format("Y")."-".Auth::user()->jurusan->nama."-".Auth::user()->name."/" , 'public');
-            $backupPath = env("BACKUP_PHOTOS"). $sourcePath;
-
-
-            // buat folder backup jika belum ada
-            if(!file_exists(dirname($backupPath))) {
-                mkdir(dirname($backupPath), 0777, true);
+            if ($request->hasFile('photo')) {
+                $newPhoto = $this->files->storePhotoAsWebp($request->file('photo'), $user);
             }
-            
-            // Simpan juga ke folder backup
-            if(!copy(storage_path("app/public/".$sourcePath), $backupPath)){
-                return Inertia::render("Jurnal/Index")->with("error","Gambar gagal disimpan");
-            };
-            
-            $validate["photo"] = $sourcePath ?? null;
+        } catch (FileConversionException $e) {
+            $this->files->deletePdf($newPdf);
+            $this->files->deletePhoto($newPhoto);
+
+            return redirect()->back()->with('error', $e->getMessage());
         }
 
-        $jrnlId->keterangan = $validate["keterangan"];
-        $jrnlId->kegiatan = $validate["kegiatan"];
-        $jrnlId->photo = $validate["photo"] ?? $jrnlId->photo;
-        $jrnlId->save();
-        Cache::forget("jurnals". $jrnlId->user_id);
-        return redirect()->back()->with("success","Sukses Mengubah Jurnal");
+        $oldPdf = $jurnal->file_pdf;
+        $oldPhoto = $jurnal->photo;
+
+        $jurnal->keterangan = $request->validated('keterangan');
+        $jurnal->kegiatan = $request->validated('kegiatan');
+        $jurnal->file_pdf = $newPdf ?? $jurnal->file_pdf;
+        $jurnal->photo = $newPhoto ?? $jurnal->photo;
+
+        if ($jurnal->status_verifikasi === Jurnal::STATUS_DITOLAK) {
+            $jurnal->status_verifikasi = Jurnal::STATUS_PENDING;
+            $jurnal->mark = false;
+            $jurnal->diverifikasi_oleh = null;
+            $jurnal->diverifikasi_at = null;
+        }
+        $jurnal->save();
+
+        // File lama baru dihapus setelah data tersimpan.
+        if ($newPdf) {
+            $this->files->deletePdf($oldPdf);
+        }
+        if ($newPhoto) {
+            $this->files->deletePhoto($oldPhoto);
+        }
+
+        Jurnal::flushCacheFor($jurnal->user_id);
+
+        return redirect()->back()->with('success', 'Sukses Mengubah Absensi');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Hapus sementara (masuk Sampah). File tetap disimpan sampai dihapus
+     * permanen dari Sampah.
      */
     public function destroy(string $id)
     {
-        $jrnlId = Jurnal::findOrFail($id);
-        
+        $jurnal = Jurnal::with('user.tempat')->findOrFail($id);
+        Gate::authorize('delete', $jurnal);
 
-        $jrnlId->delete();
-        Cache::forget("jurnals". $jrnlId->user_id);
-        return redirect()->back()->with("success","Sukses Menghapus Jurnal");
+        $jurnal->delete();
+        Jurnal::flushCacheFor($jurnal->user_id);
+
+        return redirect()->back()->with('success', 'Sukses Menghapus Absensi');
+    }
+
+    /**
+     * Verifikasi oleh admin / pembimbing siswa yang bersangkutan.
+     */
+    public function verifikasi(VerifikasiJurnalRequest $request, string $id)
+    {
+        $jurnal = Jurnal::with('user.tempat')->findOrFail($id);
+        Gate::authorize('verify', $jurnal);
+
+        $status = $request->validated('status');
+
+        DB::transaction(function () use ($jurnal, $status, $request) {
+            $jurnal->status_verifikasi = $status;
+            $jurnal->mark = $status === Jurnal::STATUS_DISETUJUI;
+            $jurnal->catatan_verifikasi = $request->validated('catatan');
+            $jurnal->diverifikasi_oleh = $request->user()->id;
+            $jurnal->diverifikasi_at = now();
+            $jurnal->save();
+        });
+
+        Jurnal::flushCacheFor($jurnal->user_id);
+
+        return redirect()->back()->with(
+            'success',
+            $status === Jurnal::STATUS_DISETUJUI ? 'Absensi berhasil disetujui' : 'Absensi ditolak dan dikembalikan ke siswa'
+        );
+    }
+
+    /**
+     * Unduh / tampilkan PDF absensi. File disimpan di disk privat sehingga
+     * hanya bisa diakses lewat route ini setelah lolos pengecekan hak akses.
+     */
+    public function pdf(string $id)
+    {
+        $jurnal = Jurnal::withTrashed()->with('user.tempat')->findOrFail($id);
+        Gate::authorize('view', $jurnal);
+
+        $disk = Storage::disk($this->files->pdfDisk());
+        abort_unless($jurnal->file_pdf && $disk->exists($jurnal->file_pdf), 404);
+
+        $nama = 'absensi-'.str($jurnal->user?->name ?? 'siswa')->slug().'-'.($jurnal->minggu_mulai?->format('Y-m-d') ?? $jurnal->id).'.pdf';
+
+        return $disk->response($jurnal->file_pdf, $nama, [
+            'Content-Type' => 'application/pdf',
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
+        ], 'inline');
     }
 }

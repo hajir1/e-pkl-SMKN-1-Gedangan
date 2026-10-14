@@ -1,274 +1,266 @@
 import { AlertConfirm } from "@/Helpers/Alert";
 import { Link, router, usePage } from "@inertiajs/react";
 import {
-    Book,
-    BookCopy,
-    Calendar,
-    Castle,
-    Check,
-    CheckCircle2,
-    Edit,
-    FileSliders,
-    GpuIcon,
+    Building2,
+    CalendarCheck2,
+    CalendarRange,
+    CircleHelp,
+    ClipboardList,
+    FileText,
+    GraduationCap,
     IdCard,
-    Image,
-    LayoutIcon,
-    ListStartIcon,
+    Images,
+    LayoutDashboard,
     LogOut,
-    Newspaper,
-    Trash,
-    User,
-    UserPen,
-    Users,
+    MapPinned,
+    Trash2,
+    UserCog,
+    UserRound,
+    UsersRound,
 } from "lucide-react";
 
-const SideMenu = ({ children, ...props }) => {
-    const { auth, ptCount, lpCount, trashJurnalCount } = usePage().props;
-    const routes = [
-        {
-            id: 1,
-            nama: "Dashbaord",
-            pathname: "dashboard",
-            route: route("dashboard"),
-            icon: <LayoutIcon />,
-            isLink: true,
-            rolePermision: [
-                "admin",
-                "pembimbing_sekolah",
-                "pembimbing_pt",
-                "siswa",
-            ],
-        },
+const ALL = ["admin", "pembimbing_sekolah", "pembimbing_pt", "siswa"];
 
-        {
-            id: 2,
-            nama: "User Terdata",
-            pathname: "data_siswa",
-            route: route("data_siswa.index"),
-            icon: <IdCard />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 1200,
-            nama: "Laporan",
-            pathname:
-                window.location.pathname.split("/", 3)[1] === "laporan"
-                    ? window.location.pathname.replace("/", "")
-                    : "",
-            route:
-                auth.role === "siswa"
-                    ? route("laporan.create")
-                    : route("laporan.index"),
-            icon: <Newspaper />,
-            rolePermision: [
-                "siswa",
-                "admin",
-                "pembimbing_pt",
-                "pembimbing_sekolah",
-            ],
-            isLink: true,
-            isAlert: true,
-            alert: auth.role === "admin" ? lpCount : 0,
-        },
-        {
-            id: 3,
-            nama: auth.role === "admin" ? "Ajuan Tempat" : "Ajukan Tempat",
-            pathname:
-                window.location.pathname.split("/", 3)[1] === "pengajuanTempat"
-                    ? window.location.pathname.replace("/", "")
-                    : "",
-            route:
-                auth.role === "admin"
-                    ? route("pengajuanTempat.index")
-                    : route("pengajuanTempat.create"),
-            icon: <CheckCircle2 />,
-            rolePermision: ["siswa", "admin"],
-            isLink: true,
-            isAlert: true,
-            alert: auth.role === "admin" ? ptCount : 0,
-        },
-        {
-            id: 4,
-            nama: "Slider",
-            pathname: "gambar",
-            route: route("gambar.index"),
-            icon: <Image />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 5,
-            nama: "Jurusan",
-            pathname: "jurusan",
-            route: route("jurusan.index"),
-            icon: <Book />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 6,
-            nama: "Tahun Ajaran",
-            pathname: "tahunAjaran",
-            route: route("tahunAjaran.index"),
-            icon: <Calendar />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 7,
-            nama: "Tempat Du/Di",
-            pathname: "tempat",
-            route: route("tempat.index"),
-            icon: <Castle />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 8,
-            nama: "Pembimbing",
-            pathname:
-                window.location.pathname.split("/", 3)[1] === "pembimbing"
-                    ? window.location.pathname.replace("/", "")
-                    : "",
-            route: route("pembimbing.index"),
-            icon: <UserPen />,
-            rolePermision: ["admin"],
-            isLink: true,
-        },
-        {
-            id: 9,
-            nama: "Siswa",
-            pathname:
-                window.location.pathname.split("/", 3)[1] === "siswa"
-                    ? window.location.pathname.replace("/", "")
-                    : "",
-            route: route("siswa.index"),
-            icon: <User />,
-            rolePermision: [
-                "admin",
-                "pembimbing_pt",
-                "pembimbing_sekolah",
-                "siswa",
-            ],
-            isLink: true,
-        },
-        {
-            id: 10,
-            nama: "Jurnal",
-            pathname: "jurnal",
-            route: route("jurnal.index"),
-            icon: <BookCopy />,
-            isLink: true,
-            rolePermision: [
-                "siswa",
-                "admin",
-                "pembimbing_pt",
-                "pembimbing_sekolah",
-            ],
-        },
-        {
-            id: 13,
-            nama: "Trash",
-            pathname: "trashJurnal",
-            route: route("trashJurnal.index"),
-            icon: <Trash />,
-            isLink: true,
-            rolePermision: ["siswa"],
-            isAlert: true,
-            alert: auth.role === "siswa" ? trashJurnalCount : 0,
-        },
-        {
-            id: 11,
-            nama: "Edit Akun",
-            pathname: "profile",
-            route: route("profile.edit"),
-            icon: <Edit />,
-            isLink: true,
-            rolePermision: [
-                "siswa",
-                "pembimbing_pt",
-                "pembimbing_sekolah",
-                "admin",
-            ],
-        },
-
-        {
-            id: 12,
-            nama: "Dokumentasi",
-            pathname: "dokumentasi",
-            route: route("dokumentasi"),
-            icon: <FileSliders />,
-            isLink: true,
-            rolePermision: [
-                "siswa",
-                "pembimbing_pt",
-                "pembimbing_sekolah",
-                "admin",
-            ],
-        },
-
-        {
-            id: 14,
-            nama: "Logout",
-            icon: <LogOut />,
-            isLink: false,
-        },
-    ];
-    const handleLogout = (e) => {
-        e.preventDefault();
-        AlertConfirm(
-            "Anda Akan Logout!",
-            "question",
-            () => {
-                router.post(route("logout"));
+/**
+ * Daftar menu per role. `match` adalah segmen URL pertama yang membuat menu
+ * aktif (sebelumnya memakai window.location yang tidak selalu ikut
+ * diperbarui dan membuat menu "Laporan"/"Pembimbing" tidak pernah aktif).
+ */
+const buildMenu = (role, counts) => [
+    {
+        title: "Utama",
+        items: [
+            {
+                nama: "Dashboard",
+                href: route("dashboard"),
+                match: ["dashboard"],
+                icon: <LayoutDashboard />,
+                roles: ALL,
             },
-            "Ya , Logout"
-        );
-    };
+            {
+                nama: role === "siswa" ? "Absensi Mingguan" : "Absensi & Jurnal",
+                href: route("jurnal.index"),
+                match: ["jurnal"],
+                icon: <CalendarCheck2 />,
+                roles: ALL,
+                badge: role !== "siswa" ? counts.absensiPendingCount : 0,
+                badgeLabel: "absensi menunggu verifikasi",
+            },
+            {
+                nama: "Sampah Absensi",
+                href: route("trashJurnal.index"),
+                match: ["trashJurnal"],
+                icon: <Trash2 />,
+                roles: ["siswa"],
+                badge: counts.trashJurnalCount,
+                badgeTone: "slate",
+                badgeLabel: "absensi di sampah",
+            },
+        ],
+    },
+    {
+        title: "Kegiatan PKL",
+        items: [
+            {
+                nama: role === "siswa" ? "Data Saya" : role === "admin" ? "Siswa" : "Siswa Bimbingan",
+                href: route("siswa.index"),
+                match: ["siswa"],
+                icon: role === "siswa" ? <UserRound /> : <UsersRound />,
+                roles: ALL,
+            },
+            {
+                nama: role === "siswa" ? "Judul Laporan" : "Laporan",
+                href: role === "siswa" ? route("laporan.create") : route("laporan.index"),
+                match: ["laporan"],
+                icon: <FileText />,
+                roles: ALL,
+                badge: role === "admin" ? counts.lpCount : 0,
+                badgeLabel: "judul menunggu keputusan",
+            },
+            {
+                nama: role === "admin" ? "Pengajuan Tempat" : "Ajukan Tempat PKL",
+                href:
+                    role === "admin"
+                        ? route("pengajuanTempat.index")
+                        : route("pengajuanTempat.create"),
+                match: ["pengajuanTempat"],
+                icon: <MapPinned />,
+                roles: ["siswa", "admin"],
+                badge: role === "admin" ? counts.ptCount : 0,
+                badgeLabel: "pengajuan baru",
+            },
+        ],
+    },
+    {
+        title: "Master Data",
+        items: [
+            {
+                nama: "Data Registrasi",
+                href: route("data_siswa.index"),
+                match: ["data_siswa"],
+                icon: <IdCard />,
+                roles: ["admin"],
+            },
+            {
+                nama: "Pembimbing",
+                href: route("pembimbing.index"),
+                match: ["pembimbing"],
+                icon: <UserCog />,
+                roles: ["admin"],
+            },
+            {
+                nama: "Tempat DU/DI",
+                href: route("tempat.index"),
+                match: ["tempat"],
+                icon: <Building2 />,
+                roles: ["admin"],
+            },
+            {
+                nama: "Jurusan",
+                href: route("jurusan.index"),
+                match: ["jurusan"],
+                icon: <GraduationCap />,
+                roles: ["admin"],
+            },
+            {
+                nama: "Tahun Ajaran",
+                href: route("tahunAjaran.index"),
+                match: ["tahunAjaran"],
+                icon: <CalendarRange />,
+                roles: ["admin"],
+            },
+            {
+                nama: "Slider Beranda",
+                href: route("gambar.index"),
+                match: ["gambar"],
+                icon: <Images />,
+                roles: ["admin"],
+            },
+        ],
+    },
+    {
+        title: "Akun",
+        items: [
+            {
+                nama: "Profil Saya",
+                href: route("profile.edit"),
+                match: ["profile"],
+                icon: <ClipboardList />,
+                roles: ALL,
+            },
+            {
+                nama: "Panduan",
+                href: route("dokumentasi"),
+                match: ["dokumentasi"],
+                icon: <CircleHelp />,
+                roles: ALL,
+            },
+        ],
+    },
+];
+
+export const handleLogout = (e) => {
+    e?.preventDefault();
+    AlertConfirm(
+        "Anda akan keluar dari aplikasi.",
+        "question",
+        () => {
+            router.post(route("logout"));
+        },
+        "Ya, Keluar"
+    );
+};
+
+const SideMenu = ({ onNavigate }) => {
+    const page = usePage();
+    const { auth, ptCount, lpCount, trashJurnalCount, absensiPendingCount } =
+        page.props;
+    const url = page.url;
+    const role = auth?.role;
+    const segment = String(url ?? "/")
+        .split("?")[0]
+        .split("/")
+        .filter(Boolean)[0];
+
+    const groups = buildMenu(role, {
+        ptCount: ptCount ?? 0,
+        lpCount: lpCount ?? 0,
+        trashJurnalCount: trashJurnalCount ?? 0,
+        absensiPendingCount: absensiPendingCount ?? 0,
+    })
+        .map((g) => ({
+            ...g,
+            items: g.items.filter((item) => item.roles.includes(role)),
+        }))
+        .filter((g) => g.items.length > 0);
+
     return (
-        <>
-            {routes.map((route) => (
-                <li key={route.id}>
-                    {route.isLink ? (
-                        route.rolePermision?.includes(auth?.role) && (
-                            <Link
-                                as="button"
-                                href={route.route}
-                                className={`${
-                                    window.location.pathname.replace(
-                                        "/",
-                                        ""
-                                    ) === route.pathname
-                                        ? "bg-blue-700 text-white hover:bg-blue-600"
-                                        : "text-gray-900 hover:bg-stone-300"
-                                } w-full flex items-center p-2 rounded-lg   group`}
-                            >
-                                <span className="">{route.icon}</span>
-                                <span className="ms-1 sm:ms-3 text-xs md:text-base sm:block">
-                                    {route.nama}
-                                </span>
-                                {route.isAlert && route.alert !== 0 && (
-                                    <span className="rounded-full w-6 h-6 ms-0 sm:ms-3  bg-red-700 text-white animate-pulse">
-                                        {route.alert}
-                                    </span>
-                                )}
-                            </Link>
-                        )
-                    ) : (
-                        <div
-                            onClick={(e) => handleLogout(e)}
-                            className="flex items-center p-2 text-gray-900 rounded-lg dark:text-slate-800 hover:bg-stone-300 group cursor-pointer"
-                        >
-                            <span className="">{route.icon}</span>
-                            <span className="ms-1 sm:ms-3 text-xs md:text-base sm:block">
-                                {route.nama}
-                            </span>
-                        </div>
-                    )}
-                </li>
+        <nav aria-label="Menu utama" className="space-y-6">
+            {groups.map((group) => (
+                <div key={group.title}>
+                    <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        {group.title}
+                    </p>
+                    <ul className="mt-2 space-y-0.5">
+                        {group.items.map((item) => {
+                            const active = item.match.includes(segment);
+                            return (
+                                <li key={item.nama}>
+                                    <Link
+                                        href={item.href}
+                                        onClick={onNavigate}
+                                        aria-current={active ? "page" : undefined}
+                                        className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition [&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:shrink-0 ${
+                                            active
+                                                ? "bg-blue-50 text-blue-800"
+                                                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                        }`}
+                                    >
+                                        <span
+                                            className={
+                                                active
+                                                    ? "text-blue-700"
+                                                    : "text-slate-400 group-hover:text-slate-600"
+                                            }
+                                        >
+                                            {item.icon}
+                                        </span>
+                                        <span className="flex-1 truncate">
+                                            {item.nama}
+                                        </span>
+                                        {item.badge > 0 && (
+                                            <span
+                                                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
+                                                    item.badgeTone === "slate"
+                                                        ? "bg-slate-200 text-slate-700"
+                                                        : "bg-rose-600 text-white"
+                                                }`}
+                                            >
+                                                {item.badge > 99 ? "99+" : item.badge}
+                                                <span className="sr-only">
+                                                    {" "}
+                                                    {item.badgeLabel}
+                                                </span>
+                                            </span>
+                                        )}
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
             ))}
-        </>
+            <div className="border-t border-slate-200 pt-4">
+                <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-rose-50 hover:text-rose-700 [&_svg]:h-[18px] [&_svg]:w-[18px]"
+                >
+                    <LogOut className="text-slate-400" />
+                    Keluar
+                </button>
+            </div>
+        </nav>
     );
 };
 

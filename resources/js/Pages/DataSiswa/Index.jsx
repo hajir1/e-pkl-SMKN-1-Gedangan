@@ -1,591 +1,262 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import Pagination from "@/Components/Pagination";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
+import Badge from "@/Components/Badge";
+import Callout from "@/Components/Callout";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
 import Filter from "@/Components/Filter";
-import TitleModal from "@/Components/TitleModal";
-import InputLabel from "@/Components/InputLabel";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
 import { OptionSorting } from "@/Components/Option";
-import Table from "@/Components/Table";
+import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
 import SecondaryButton from "@/Components/SecondaryButton";
-import InputError from "@/Components/InputError";
+import Select from "@/Components/Select";
+import Spinner from "@/Components/Spinner";
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
 import TextInput from "@/Components/TextInput";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { cleanParams } from "@/Helpers/format";
+import { useListFilter } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { useTypeImportSiswa } from "@/state/Zustand";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
-    const { siswas, auth, filters, dataSiswas } = usePage().props;
-    const [createModal, setCreateModal] = useState(false);
-    const [editModal, seteditModal] = useState(null);
-    const [sortModal, setSortModal] = useState(false);
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Download, FileSpreadsheet, IdCard, Pencil, Plus, Save, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
+
+/** NISN disimpan sebagai induk + kode jurusan (mis. "1234" + ".07.24"). */
+const pecahNisn = (nisn = "") => {
+    const i = nisn.indexOf(".");
+    return i > 0 ? [nisn.slice(0, i), nisn.slice(i)] : [nisn.slice(0, 4), nisn.slice(4)];
+};
+
+function DataSiswaModal({ show, siswa, onClose }) {
+    const isEdit = Boolean(siswa);
     const { type, setType } = useTypeImportSiswa();
+    const mode = isEdit ? "create" : type;
+    const { data, setData, post, put, processing, errors, clearErrors, reset, progress } = useForm({ induk: "", jurusan: "", nama: "", file: null });
 
-    const { data, setData, processing, errors, post, put, reset, setError } =
-        useForm({
-            induk: "",
-            jurusan: "",
-            nama: "",
-            file: "",
-        });
-    const { data: dataSearch, setData: setDataSearch } = useForm({
-        search: filters?.search ?? "",
-        sort_by: filters?.sort_by ?? "",
-        sort_order: filters?.sort_order ?? "",
-        kode: filters?.kode ?? "",
-        aktivasi: filters?.aktivasi ?? "",
-    });
-    const handleDelete = (e, id, nama) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Mengapus Registrasi User ${nama}`;
-        const cb = () =>
-            router.delete(route("data_siswa.destroy", id), {
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth?.flash?.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                    }
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleEdit = (e, id) => {
-        e.preventDefault();
-        const filtered = siswas.data.find((siswa) => siswa.id === id);
-        if (filtered) {
-            setError("induk", "");
-            setError("jurusan", "");
-            setError("nama", "");
-            setData("nama", filtered.nama);
-            setData("jurusan", filtered.nisn.slice(4));
-            setData("induk", filtered.nisn.slice(0,4));
-            seteditModal(filtered);
+    useEffect(() => {
+        if (!show) return;
+        clearErrors();
+        if (isEdit) {
+            const [induk, jurusan] = pecahNisn(siswa.nisn ?? "");
+            setData({ induk, jurusan, nama: siswa.nama ?? "", file: null });
+        } else {
+            reset();
         }
-    };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        put(route("data_siswa.update", editModal.id), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    seteditModal(null);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show, siswa?.id]);
 
-                    seteditModal(null);
-                }
-            },
-        });
+    const selesai = {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            if (!page.props.auth?.flash?.error) {
+                reset();
+                onClose();
+            }
+        },
     };
-    const handleSearchChange = (e) => {
-        e.preventDefault();
-        const { name, value } = e.target;
-        const update = {
-            ...dataSearch,
-            [name]: value,
-        };
-        setDataSearch(update);
-        const params = {};
-        if (update.search !== "") params.search = update.search;
-        if (update.sort_by !== "") params.sort_by = update.sort_by;
-        if (update.sort_by !== "" && update.sort_order !== "")
-            params.sort_order = update.sort_order;
-        if (update.kode !== "") params.kode = update.kode;
-        if (update.aktivasi !== "") params.aktivasi = update.aktivasi;
 
-        router.get(route("data_siswa.index"), params, {
-            preserveState: true,
-            preserveScroll: true,
-        });
-    };
-    const handleExport = (e) => {
+    const submit = (e) => {
         e.preventDefault();
+        if (isEdit) put(route("data_siswa.update", siswa.id), selesai);
+        else if (mode === "import") post(route("data_siswas.import"), { ...selesai, forceFormData: true });
+        else post(route("data_siswa.store"), selesai);
+    };
+
+    return (
+        <Modal show={show} onClose={processing ? () => {} : onClose} maxWidth="lg">
+            <TitleModal title={isEdit ? "Ubah Data NISN" : "Tambah Data NISN"} description={isEdit ? siswa?.nama : "Data induk siswa yang nantinya dipakai untuk aktivasi akun."} onClick={onClose} />
+            <form onSubmit={submit} noValidate>
+                <ModalBody className="space-y-4">
+                    {!isEdit && (
+                        <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1" role="tablist">
+                            {[
+                                { v: "import", l: "Import Excel", i: <FileSpreadsheet /> },
+                                { v: "create", l: "Isi Manual", i: <Plus /> },
+                            ].map((t) => (
+                                <button
+                                    key={t.v}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={mode === t.v}
+                                    onClick={() => setType(t.v)}
+                                    className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition [&_svg]:h-4 [&_svg]:w-4 ${
+                                        mode === t.v ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+                                    }`}
+                                >
+                                    {t.i} {t.l}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {mode === "import" ? (
+                        <>
+                            <Callout tone="info">
+                                Gunakan format Excel data induk sekolah: data dibaca mulai baris ke-12, kolom B = no. induk, C = kode jurusan, D = nama. NISN yang sudah ada akan diperbarui.
+                            </Callout>
+                            <FormField label="File Excel (.xlsx / .xls, maks. 5 MB)" htmlFor="file" required error={errors.file || errors.duplicate}>
+                                <TextInput id="file" type="file" accept=".xlsx,.xls" className="w-full" invalid={!!errors.file} onChange={(e) => setData("file", e.target.files?.[0] ?? null)} />
+                            </FormField>
+                            {errors.details && <p className="text-xs text-slate-500">Contoh data duplikat: {errors.details}</p>}
+                            {progress && (
+                                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                                    <div className="h-full bg-blue-600" style={{ width: `${progress.percentage}%` }} />
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <FormField label="No. induk" htmlFor="induk" required error={errors.induk} help="3-7 karakter">
+                                <TextInput id="induk" className="w-full" value={data.induk} onChange={(e) => setData("induk", e.target.value)} invalid={!!errors.induk} />
+                            </FormField>
+                            <FormField label="Kode jurusan" htmlFor="jurusan" required error={errors.jurusan} help="3-20 karakter">
+                                <TextInput id="jurusan" className="w-full" value={data.jurusan} onChange={(e) => setData("jurusan", e.target.value)} invalid={!!errors.jurusan} />
+                            </FormField>
+                            <FormField label="Nama siswa" htmlFor="nama" required error={errors.nama} className="sm:col-span-2">
+                                <TextInput id="nama" className="w-full" value={data.nama} onChange={(e) => setData("nama", e.target.value)} invalid={!!errors.nama} />
+                            </FormField>
+                            <p className="text-xs text-slate-500 sm:col-span-2">
+                                NISN yang tersimpan: <span className="font-mono font-medium text-slate-800">{data.induk + data.jurusan || "-"}</span>
+                            </p>
+                        </div>
+                    )}
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={onClose} disabled={processing}>Batal</SecondaryButton>
+                    <PrimaryButton disabled={processing || (mode === "import" && !data.file)}>
+                        {processing ? <Spinner /> : mode === "import" ? <Upload /> : <Save />}
+                        {mode === "import" ? "Import" : "Simpan"}
+                    </PrimaryButton>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
+export default function Index() {
+    const { siswas, filters, dataSiswas = [] } = usePage().props;
+    const [sortModal, setSortModal] = useState(false);
+    const [form, setForm] = useState({ show: false, siswa: null });
+    const { dataSearch, handleSearchChange, resetFilter, activeCount } = useListFilter("data_siswa.index", filters, ["kode", "aktivasi"]);
+    const rows = siswas?.data ?? [];
+
+    const handleDelete = (s) =>
+        AlertConfirm(`Data NISN ${s.nama} (${s.nisn}) akan dihapus.`, "warning", () => router.delete(route("data_siswa.destroy", s.id), { preserveScroll: true }), "Ya, Hapus");
+
+    const handleExport = () =>
         AlertConfirm(
-            `Apakah anda yakin ingin export data siswa`,
+            "Data NISN akan diekspor ke Excel sesuai pencarian dan filter yang aktif.",
             "question",
             () => {
-                window.location.href = route(
-                    "data_siswas.export",
-                    {
-                        search: dataSearch.search,
-                        sort_by: dataSearch.sort_by,
-                        sort_order: dataSearch.sort_order,
-                        kode: dataSearch.kode,
-                        aktivasi: dataSearch.aktivasi,
-                    },
-                    true
-                );
-                toast.success(`sukses meng export data ke excel`);
+                window.location.href = route("data_siswas.export", cleanParams(filters ?? {}));
             },
-            "Ya, Export!"
+            "Ya, Ekspor"
         );
-    };
-    const handleStore = (e) => {
-        e.preventDefault();
-        if (type === "import") {
-            post(route("data_siswas.import"), {
-                forceFormData: true,
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth.flash.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                        setCreateModal(false);
-                        reset();
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                        setCreateModal(false);
-                    }
-                },
-            });
-        } else {
-            post(route("data_siswa.store"), {
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth.flash.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                        setCreateModal(false);
-                        reset();
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                        setCreateModal(false);
-                    }
-                },
-            });
-        }
-    };
+
     return (
         <AuthenticatedLayout>
-            <Head title="User Terdata" />
-            <ToastContainer className={`w-96`} />
-            <TitlePage
-                nameRoute={`Tambah Siswa`}
-                quote={"List User yang Terdata Saat Ini"}
-                title={`User`}
-                onClick={() => setCreateModal(!createModal)}
-            >
-                <SecondaryButton
-                    className="bg-blue-700 text-white"
-                    onClick={(e) => handleExport(e)}
-                >
-                    Export
-                </SecondaryButton>
-            </TitlePage>
-            <Filter
-                sortModal={sortModal}
-                value={dataSearch.search}
-                onChange={handleSearchChange}
-                setSortModal={setSortModal}
-            />
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+            <Head title="Data NISN Siswa" />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Data NISN Siswa" quote="Data induk siswa yang dipakai untuk aktivasi dan pembuatan akun.">
+                    <SecondaryButton onClick={handleExport}>
+                        <Download /> Ekspor Excel
+                    </SecondaryButton>
+                    <PrimaryButton type="button" onClick={() => setForm({ show: true, siswa: null })}>
+                        <Plus /> Tambah Data
+                    </PrimaryButton>
+                </TitlePage>
+
+                <Card className="overflow-hidden">
+                    <Filter sortModal={sortModal} setSortModal={setSortModal} value={dataSearch.search} onChange={handleSearchChange} activeCount={activeCount} placeholder="Cari nama atau NISN..." />
                     <Table
                         headers={[
-                            { nama: "#" },
-                            { nama: "No Nisn" },
+                            { nama: "#", className: "w-12" },
+                            { nama: "NISN" },
                             { nama: "Nama" },
-                            { nama: "Opsi" },
+                            { nama: "Aktivasi" },
+                            { nama: "Aksi", className: "text-right" },
                         ]}
+                        minWidth="min-w-[560px]"
                     >
                         <tbody>
-                            {siswas?.data.length > 0 ? (
-                                siswas?.data.map((siswa, index) => (
-                                    <tr
-                                        key={index}
-                                        className={`${
-                                            siswa.isActive
-                                                ? "bg-blue-700 text-white border     border-white"
-                                                : "bg-white border-b  border-gray-200"
-                                        }`}
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + siswas?.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {siswa.nisn ?? "Belum Diisi"}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {siswa.nama ?? "Belum Diisi"}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {auth.role === "admin" && (
-                                                <div className=" flex justify-center gap-2">
-                                                    <div
-                                                        onClick={(e) =>
-                                                            handleEdit(
-                                                                e,
-                                                                siswa.id
-                                                            )
-                                                        }
-                                                        className={`${
-                                                            siswa.isActive
-                                                                ? " text-white"
-                                                                : "font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
-                                                        }`}
-                                                    >
-                                                        <Edit />
-                                                    </div>
-                                                    <Modal
-                                                        show={
-                                                            editModal?.id ===
-                                                            siswa.id
-                                                        }
-                                                        onClose={() =>
-                                                            seteditModal(null)
-                                                        }
-                                                    >
-                                                        <div className="relative bg-white rounded-lg shadow-sm ">
-                                                            <TitleModal
-                                                                icon={<X />}
-                                                                title={`Edit ${siswa.nama}`}
-                                                                onClick={() =>
-                                                                    seteditModal(
-                                                                        !editModal
-                                                                    )
-                                                                }
-                                                            ></TitleModal>
-                                                            <form
-                                                                onSubmit={
-                                                                    handleUpdate
-                                                                }
-                                                                className="p-4 md:p-5 space-y-5"
-                                                            >
-                                                                <div className="">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "No Induk"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="induk"
-                                                                        type="text"
-                                                                        name="induk"
-                                                                        value={
-                                                                            data.induk
-                                                                        }
-                                                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "induk",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        readOnly={editModal?.isActive}
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.induk
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                                <div className="">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "No Jurusan"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="jurusan"
-                                                                        type="text"
-                                                                        name="jurusan"
-                                                                        value={
-                                                                            data.jurusan
-                                                                        }
-                                                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "jurusan",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        readOnly={editModal?.isActive}
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.jurusan
-                                                                        }
-                                                                    />
-                                                                </div>
-                                                                <div className="">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Nama"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="nama"
-                                                                        type="text"
-                                                                        name="nama"
-                                                                        value={
-                                                                            data.nama
-                                                                        }
-                                                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "nama",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.nama
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                <PrimaryButton
-                                                                    type="submit"
-                                                                    className="gap-2"
-                                                                    disabled={
-                                                                        processing
-                                                                    }
-                                                                >
-                                                                    <Edit />
-                                                                    <span className="block">
-                                                                        {processing
-                                                                            ? "Proses..."
-                                                                            : "Ubah Data Siswa"}
-                                                                    </span>
-                                                                </PrimaryButton>
-                                                            </form>
-                                                        </div>
-                                                    </Modal>
-                                                    <div
-                                                        onClick={(e) =>
-                                                            handleDelete(
-                                                                e,
-                                                                siswa.id,
-                                                                siswa.nama
-                                                            )
-                                                        }
-                                                        className={`${
-                                                            siswa.isActive
-                                                                ? "hidden"
-                                                                : "font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer"
-                                                        }`}
-                                                    >
-                                                        <Trash />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
+                            {rows.length > 0 ? (
+                                rows.map((s, index) => (
+                                    <Tr key={s.id}>
+                                        <Td className="text-slate-500">{index + (siswas.from ?? 1)}</Td>
+                                        <Td className="font-mono text-slate-800">{s.nisn}</Td>
+                                        <Td className="font-medium text-slate-900">{s.nama}</Td>
+                                        <Td>{s.isActive ? <Badge tone="emerald">Sudah punya akun</Badge> : <Badge>Belum aktivasi</Badge>}</Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <IconButton label="Ubah data" variant="primary" onClick={() => setForm({ show: true, siswa: s })}>
+                                                    <Pencil />
+                                                </IconButton>
+                                                <IconButton label={s.isActive ? "Tidak bisa dihapus: sudah dipakai akun" : "Hapus data"} variant="danger" disabled={Boolean(s.isActive)} onClick={() => handleDelete(s)}>
+                                                    <Trash2 />
+                                                </IconButton>
+                                            </div>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Registrasi Akun Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={5}>
+                                    {activeCount > 0 || filters?.search ? (
+                                        <EmptyState title="Tidak ada data yang cocok" action={<SecondaryButton onClick={resetFilter}>Atur ulang filter</SecondaryButton>} />
+                                    ) : (
+                                        <EmptyState icon={<IdCard />} title="Belum ada data NISN" description="Import file Excel data induk atau tambahkan secara manual." />
+                                    )}
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {siswas?.data.length > 0 && (
-                    <Pagination datas={siswas}></Pagination>
-                )}
+                    <Pagination datas={siswas} />
+                </Card>
             </div>
-            <Modal show={sortModal} onClose={() => setSortModal(!sortModal)}>
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Filter Dan Sorting Data User"}
-                        onClick={() => {
-                            setSortModal(!sortModal);
-                        }}
-                    ></TitleModal>
+
+            <DataSiswaModal show={form.show} siswa={form.siswa} onClose={() => setForm({ show: false, siswa: form.siswa })} />
+
+            <Modal show={sortModal} onClose={() => setSortModal(false)} maxWidth="lg">
+                <TitleModal title="Filter & Urutkan" description="Perubahan langsung diterapkan pada tabel." onClick={() => setSortModal(false)} />
+                <ModalBody className="space-y-5">
                     <OptionSorting
                         dataSearch={dataSearch}
                         handleSearchChange={handleSearchChange}
                         datas={[
-                            { name: "Default", value: "" },
+                            { name: "Bawaan (terbaru)", value: "" },
                             { name: "Nama", value: "nama" },
-                            { name: "Nisn", value: "nisn" },
+                            { name: "NISN", value: "nisn" },
+                            { name: "Status aktivasi", value: "isActive" },
                         ]}
                     />
-                    <div className="p-4 md:p-5">
-                        <h3 className="text-lg font-semibold text-gray-900 ">
-                            Filter Data User
-                        </h3>
-                        <div className="grid gap-4 md:mt-3 grid-cols-1">
-                            <div className="">
-                                <InputLabel value={"Kode Jurusan"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.kode}
-                                    id="kode"
-                                    name="kode"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    {dataSiswas.length > 0 &&
-                                        dataSiswas.map((ta) => (
-                                            <option
-                                                key={ta.kode}
-                                                value={ta.kode}
-                                            >
-                                                {ta.kode}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
-                            <div className="">
-                                <InputLabel value={"Aktivasi"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.aktivasi}
-                                    id="aktivasi"
-                                    name="aktivasi"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    <option value="true">Sudah</option>
-                                    <option value="false">Belum</option>
-                                </select>
-                            </div>
-                        </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField label="Kode jurusan" htmlFor="f-kode">
+                            <Select id="f-kode" name="kode" value={dataSearch.kode} onChange={handleSearchChange}>
+                                <option value="">Semua</option>
+                                {dataSiswas.map((k) => (
+                                    <option key={k.kode} value={k.kode}>
+                                        {k.kode} ({k.total})
+                                    </option>
+                                ))}
+                            </Select>
+                        </FormField>
+                        <FormField label="Status aktivasi" htmlFor="f-aktivasi">
+                            <Select id="f-aktivasi" name="aktivasi" value={dataSearch.aktivasi} onChange={handleSearchChange}>
+                                <option value="">Semua</option>
+                                <option value="true">Sudah punya akun</option>
+                                <option value="false">Belum aktivasi</option>
+                            </Select>
+                        </FormField>
                     </div>
-                </div>
-            </Modal>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah User Yang Terdata"}
-                        onClick={() => {
-                            setCreateModal(!createModal);
-                        }}
-                    ></TitleModal>
-                    <div className="gap-2 flex justify-center mt-4">
-                        <SecondaryButton
-                            onClick={() => setType("import")}
-                            className={`${
-                                type === "import" &&
-                                "bg-blue-700 hover:bg-blue-500 focus:border-white focus:bg-blue-700 active:bg-blue-400 text-white"
-                            } `}
-                        >
-                            Import
-                        </SecondaryButton>
-                        <SecondaryButton
-                            onClick={() => setType("create")}
-                            className={`${
-                                type === "create" &&
-                                "bg-blue-700 hover:bg-blue-500 focus:border-white focus:bg-blue-700 active:bg-blue-400 text-white"
-                            } `}
-                        >
-                            Buat Manual
-                        </SecondaryButton>
-                    </div>
-                    <form
-                        onSubmit={handleStore}
-                        className="p-4 md:p-5 space-y-4"
-                    >
-                        {type === "create" && (
-                            <>
-                                <div className="">
-                                    <InputLabel value={"No Induk"} />
-                                    <TextInput
-                                        id="induk"
-                                        type="text"
-                                        name="induk"
-                                        value={data.induk}
-                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                        onChange={(e) =>
-                                            setData("induk", e.target.value)
-                                        }
-                                    />
-                                    <InputError message={errors.induk} />
-                                </div>
-                                <div className="">
-                                    <InputLabel value={"No Jurusan"} />
-                                    <TextInput
-                                        id="jurusan"
-                                        type="text"
-                                        name="jurusan"
-                                        value={data.jurusan}
-                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                        onChange={(e) =>
-                                            setData("jurusan", e.target.value)
-                                        }
-                                    />
-                                    <InputError message={errors.jurusan} />
-                                </div>
-                                <div className="">
-                                    <InputLabel value={"Nama"} />
-                                    <TextInput
-                                        id="nama"
-                                        type="text"
-                                        name="nama"
-                                        value={data.nama}
-                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                        onChange={(e) =>
-                                            setData("nama", e.target.value)
-                                        }
-                                    />
-                                    <InputError message={errors.nama} />
-                                </div>
-                            </>
-                        )}
-                        {type === "import" && (
-                            <div className="space-y-4">
-                                <InputError
-                                    message={"Contoh Format Di Excel, Jika Berasal Dari Smkn 1 Gedangan , cukup kirimkan absensi"}
-                                />
-                                <img src="./img/sampleUser.png" alt="" />
-                                <div>
-                                    <InputLabel value={"Pilih File"} />
-                                    <TextInput
-                                        id="file"
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        name="file"
-                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                        onChange={(e) =>
-                                            setData("file", e.target.files[0])
-                                        }
-                                    />
-                                    <InputError message={errors.file} />
-                                </div>
-                            </div>
-                        )}
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing ? "Proses..." : "Tambah Data Siswa"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={resetFilter}>Atur ulang</SecondaryButton>
+                    <PrimaryButton type="button" onClick={() => setSortModal(false)}>Selesai</PrimaryButton>
+                </ModalFooter>
             </Modal>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

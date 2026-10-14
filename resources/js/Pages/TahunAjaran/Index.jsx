@@ -1,370 +1,123 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
+import Badge from "@/Components/Badge";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import TextInput from "@/Components/TextInput";
-import InputLabel from "@/Components/InputLabel";
-import InputError from "@/Components/InputError";
 import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
-import TitleModal from "@/Components/TitleModal";
-import Swal from "sweetalert2";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
-    const { tahunAjarans } = usePage().props;
-    const [createModal, setCreateModal] = useState(false);
-    const [editModal, seteditModal] = useState(null);
-    const { data, setData, errors, post, processing, reset, put } = useForm({
-        tahun: "",
-        isActive: "tidak",
-    });
-    const handleDelete = (e, id, tahun) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Tahun Ajaran ${tahun}`;
-        const cb = () =>
-            router.delete(route("tahunAjaran.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleStore = (e) => {
-        e.preventDefault();
-        setData("isActive", "tidak");
-        setData("tahun", "");
-        post(route("tahunAjaran.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    setCreateModal(false);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
+import SecondaryButton from "@/Components/SecondaryButton";
+import Select from "@/Components/Select";
+import Spinner from "@/Components/Spinner";
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TextInput from "@/Components/TextInput";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { formatTanggal } from "@/Helpers/format";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { CalendarRange, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-                    setCreateModal(false);
-                }
-            },
-        });
-    };
+const KOSONG = { tahun: "", isActive: "aktif" };
 
-    const handleEdit = (e, id) => {
+function TahunModal({ show, ta, onClose }) {
+    const isEdit = Boolean(ta);
+    const { data, setData, post, put, processing, errors, clearErrors, setError } = useForm(KOSONG);
+
+    // Sebelumnya status aktif tidak ikut dimuat saat edit.
+    useEffect(() => {
+        if (!show) return;
+        clearErrors();
+        setData(isEdit ? { tahun: ta.tahun ?? "", isActive: ta.isActive ?? "tidak" } : KOSONG);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show, ta?.id]);
+
+    const submit = (e) => {
         e.preventDefault();
-        const filtered = tahunAjarans.data.find((ta) => ta.id === id);
-        if (filtered) {
-            seteditModal(filtered);
-            setData("tahun", filtered.tahun);
+        if (!/^\s*\d{4}\s*-\s*\d{4}\s*$/.test(data.tahun)) {
+            return setError("tahun", "Format tahun ajaran: 2025 - 2026");
         }
+        const opts = { preserveScroll: true, onSuccess: (page) => !page.props.auth?.flash?.error && onClose() };
+        if (isEdit) put(route("tahunAjaran.update", ta.id), opts);
+        else post(route("tahunAjaran.store"), opts);
     };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        put(route("tahunAjaran.update", editModal.id), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    seteditModal(null);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    seteditModal(null);
-                }
-            },
-        });
-    };
+
+    return (
+        <Modal show={show} onClose={processing ? () => {} : onClose} maxWidth="md">
+            <TitleModal title={isEdit ? "Ubah Tahun Ajaran" : "Tambah Tahun Ajaran"} onClick={onClose} />
+            <form onSubmit={submit} noValidate>
+                <ModalBody className="space-y-4">
+                    <FormField label="Tahun ajaran" htmlFor="tahun" required error={errors.tahun} help="Contoh: 2025 - 2026">
+                        <TextInput id="tahun" className="w-full" value={data.tahun} onChange={(e) => setData("tahun", e.target.value)} invalid={!!errors.tahun} placeholder="2025 - 2026" />
+                    </FormField>
+                    <FormField label="Status" htmlFor="isActive" required error={errors.isActive}>
+                        <Select id="isActive" value={data.isActive} onChange={(e) => setData("isActive", e.target.value)}>
+                            <option value="aktif">Aktif</option>
+                            <option value="tidak">Tidak aktif</option>
+                        </Select>
+                    </FormField>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={onClose} disabled={processing}>Batal</SecondaryButton>
+                    <PrimaryButton disabled={processing}>{processing ? <Spinner /> : <Save />} Simpan</PrimaryButton>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
+export default function Index() {
+    const { tahunAjarans } = usePage().props;
+    const [form, setForm] = useState({ show: false, ta: null });
+    const rows = tahunAjarans?.data ?? [];
+
+    const handleDelete = (ta) =>
+        AlertConfirm(`Tahun ajaran ${ta.tahun} akan dihapus.`, "warning", () => router.delete(route("tahunAjaran.destroy", ta.id), { preserveScroll: true }), "Ya, Hapus");
+
     return (
         <AuthenticatedLayout>
             <Head title="Tahun Ajaran" />
-            <ToastContainer className={`w-96`} />
-
-            <TitlePage
-                nameRoute={"Tambah Tahun Ajaran"}
-                quote={
-                    "list tahun ajaran sistem rekap kegiatan pkl secara digital"
-                }
-                title={"Tahun Ajaran"}
-                onClick={() => {
-                    setCreateModal(true);
-                    setData("tahun", "");
-                }}
-            ></TitlePage>
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-                    <Table
-                        headers={[
-                            { nama: "#" },
-                            { nama: "Tahun Ajaran" },
-                            { nama: "Keaktifan" },
-                            { nama: "Opsi" },
-                        ]}
-                    >
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Tahun Ajaran" quote="Tahun ajaran aktif bisa dipilih saat registrasi dan penambahan siswa.">
+                    <PrimaryButton type="button" onClick={() => setForm({ show: true, ta: null })}>
+                        <Plus /> Tambah Tahun Ajaran
+                    </PrimaryButton>
+                </TitlePage>
+                <Card className="overflow-hidden">
+                    <Table headers={[{ nama: "#", className: "w-12" }, { nama: "Tahun ajaran" }, { nama: "Status" }, { nama: "Dibuat" }, { nama: "Aksi", className: "text-right" }]} minWidth="min-w-[520px]">
                         <tbody>
-                            {tahunAjarans.data.length > 0 ? (
-                                tahunAjarans.data.map((ta, index) => (
-                                    <tr
-                                        key={index}
-                                        className={`${
-                                            ta.isActive === "aktif"
-                                                ? "bg-blue-700 text-white border-white"
-                                                : "bg-white border-b  border-gray-200"
-                                        } border`}
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + tahunAjarans.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {ta.tahun}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {ta.isActive === "aktif"
-                                                ? "Aktif"
-                                                : "Tidak Aktif"}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center item-center gap-2">
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleEdit(e, ta.id)
-                                                    }
-                                                    className={`${
-                                                        ta.isActive === "aktif"
-                                                            ? "text-white"
-                                                            : " text-blue-600 hover:text-blue-500 "
-                                                    } font-medium cursor-pointer`}
-                                                >
-                                                    <Edit />
-                                                </div>
-                                                <Modal
-                                                    show={
-                                                        editModal?.id === ta.id
-                                                    }
-                                                    onClose={() =>
-                                                        seteditModal(null)
-                                                    }
-                                                >
-                                                    <div className="relative bg-white rounded-lg shadow-sm ">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={`Edit Tahun Ajaran ${ta.tahun}`}
-                                                            onClick={() =>
-                                                                seteditModal(
-                                                                    null
-                                                                )
-                                                            }
-                                                        ></TitleModal>
-                                                        <form
-                                                            onSubmit={
-                                                                handleUpdate
-                                                            }
-                                                            className="p-4 md:p-5"
-                                                        >
-                                                            <div className="grid gap-4 mb-4 grid-cols-2">
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Tahun Ajaran *contoh (2014 - 2015)"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="tahun"
-                                                                        type="text"
-                                                                        name="tahun"
-                                                                        value={
-                                                                            data.tahun
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "tahun",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.tahun
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Keaktifan"
-                                                                        }
-                                                                    />
-                                                                    <select
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "isActive",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        value={
-                                                                            data.isActive
-                                                                        }
-                                                                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                                                    >
-                                                                        <option
-                                                                            value={
-                                                                                "aktif"
-                                                                            }
-                                                                        >
-                                                                            Aktif
-                                                                        </option>
-                                                                        <option
-                                                                            value={
-                                                                                "tidak"
-                                                                            }
-                                                                        >
-                                                                            Tidak
-                                                                            Aktif
-                                                                        </option>
-                                                                    </select>
-
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.isActive
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            <PrimaryButton
-                                                                type="submit"
-                                                                className="gap-2"
-                                                                disabled={
-                                                                    processing
-                                                                }
-                                                            >
-                                                                <Edit />
-                                                                <span className="block">
-                                                                    {processing
-                                                                        ? "Proses..."
-                                                                        : "Ubah Tahun Ajaran"}
-                                                                </span>
-                                                            </PrimaryButton>
-                                                        </form>
-                                                    </div>
-                                                </Modal>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(
-                                                            e,
-                                                            ta.id,
-                                                            ta.tahun
-                                                        )
-                                                    }
-                                                    className={`${
-                                                        ta.isActive === "aktif"
-                                                            ? "text-white"
-                                                            : " text-red-800 hover:text-red-700 "
-                                                    } font-medium cursor-pointer`}
-                                                >
-                                                    <Trash />
-                                                </div>
+                            {rows.length > 0 ? (
+                                rows.map((ta, index) => (
+                                    <Tr key={ta.id}>
+                                        <Td className="text-slate-500">{index + (tahunAjarans.from ?? 1)}</Td>
+                                        <Td className="font-medium text-slate-900">{ta.tahun}</Td>
+                                        <Td>{ta.isActive === "aktif" ? <Badge tone="emerald">Aktif</Badge> : <Badge>Tidak aktif</Badge>}</Td>
+                                        <Td className="text-slate-500">{formatTanggal(ta.created_at)}</Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <IconButton label="Ubah tahun ajaran" variant="primary" onClick={() => setForm({ show: true, ta })}>
+                                                    <Pencil />
+                                                </IconButton>
+                                                <IconButton label="Hapus tahun ajaran" variant="danger" onClick={() => handleDelete(ta)}>
+                                                    <Trash2 />
+                                                </IconButton>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Tahun Ajaran Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={5}>
+                                    <EmptyState icon={<CalendarRange />} title="Belum ada tahun ajaran" />
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {tahunAjarans.data.length > 0 && (
-                    <Pagination datas={tahunAjarans}></Pagination>
-                )}
+                    <Pagination datas={tahunAjarans} />
+                </Card>
             </div>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah Tahun Ajaran"}
-                        onClick={() => setCreateModal(!createModal)}
-                    ></TitleModal>
-                    <form onSubmit={handleStore} className="p-4 md:p-5">
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="col-span-2">
-                                <InputLabel
-                                    value={"Tahun Ajaran *contoh (2014 - 2015)"}
-                                />
-                                <TextInput
-                                    id="tahun"
-                                    type="text"
-                                    name="tahun"
-                                    value={data.tahun}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("tahun", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.tahun}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Keaktifan"} />
-                                <select
-                                    onChange={(e) =>
-                                        setData("isActive", e.target.value)
-                                    }
-                                    value={data.isActive}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option value={"aktif"}>Aktif</option>
-                                    <option value={"tidak"}>Tidak Aktif</option>
-                                </select>
-
-                                <InputError
-                                    message={errors.isActive}
-                                    className="mt-2"
-                                />
-                            </div>
-                        </div>
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing
-                                    ? "Proses..."
-                                    : "Tambah Tahun Ajaran"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
-            </Modal>
+            <TahunModal show={form.show} ta={form.ta} onClose={() => setForm({ show: false, ta: form.ta })} />
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

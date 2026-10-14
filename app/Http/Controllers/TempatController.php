@@ -17,15 +17,18 @@ class TempatController extends Controller
     {
         $tempats = Tempat::with("user")
         ->when($request->filled("search"),function($query) use($request){
-            $query->where("nama","like","%".$request->search."%")
+            $query->where(fn($q) => $q->where("nama","like","%".$request->search."%")
             ->orWhere("kontak","like","%".$request->search."%")
             ->orWhere("bidang_usaha","like","%".$request->search."%")
             ->orWhere("lokasi","like","%".$request->search."%")
             ->orWhereHas("user",function($q2) use($request){
                 $q2->where("name","like","%".$request->search."%");   
-            });
+            }));
         })
-        ->orderBy($request->input("sort_by","created_at"),$request->input("sort_order","desc"))
+        ->orderBy(
+            in_array($request->input("sort_by"), ["nama","kontak","bidang_usaha","lokasi","created_at","updated_at","pembimbing_id"], true) ? $request->input("sort_by") : "created_at",
+            strtolower((string) $request->input("sort_order","desc")) === "asc" ? "asc" : "desc"
+        )
         ->paginate(10)->withQueryString();
 
 
@@ -54,7 +57,11 @@ class TempatController extends Controller
             "kontak"=>"required|unique:tempats,kontak",
             "bidang_usaha"=>"string|required",
             "lokasi"=>"string|required",
-            "pembimbing_id"=>"nullable",
+            "pembimbing_id"=>["nullable","integer",function($attribute,$value,$fail){
+                if(!User::role("pembimbing_pt")->whereKey($value)->exists()){
+                    $fail("Pembimbing PT Tidak Ditemukan");
+                }
+            }],
         ],[
             "nama.required"=>"Nama Du/Di Wajib Diisi",
             "nama.unique"=>"Nama Tempat Telah Digunakan",
@@ -64,8 +71,9 @@ class TempatController extends Controller
             "lokasi.required"=>"Lokasi Du/Di Wajib Diisi",
         ]);
 
-        $tpId = Tempat::with("user")->where("pembimbing_id",$validate["pembimbing_id"])->first();
-        if($tpId && $tpId->pembimbing_id !== null){
+        $validate["pembimbing_id"] = $validate["pembimbing_id"] ?? null;
+        $tpId = $validate["pembimbing_id"] ? Tempat::with("user")->where("pembimbing_id",$validate["pembimbing_id"])->first() : null;
+        if($tpId){
             return redirect()->route("tempat.index")->with("error","Pembimbing {$tpId?->user?->name} Telah Membimbing Pt Lain");
         }
 
@@ -100,7 +108,11 @@ class TempatController extends Controller
             "kontak"=>["string","required",Rule::unique("tempats","kontak")->ignore($id)],
             "bidang_usaha"=>"string|required",
             "lokasi"=>"string|required",
-            "pembimbing_id"=>"nullable",
+            "pembimbing_id"=>["nullable","integer",function($attribute,$value,$fail){
+                if(!User::role("pembimbing_pt")->whereKey($value)->exists()){
+                    $fail("Pembimbing PT Tidak Ditemukan");
+                }
+            }],
         ],[
             "nama.required"=>"Nama Du/Di Wajib Diisi",
             "nama.unique"=>"Nama Tempat Telah Digunakan",
@@ -109,8 +121,12 @@ class TempatController extends Controller
             "bidang_usaha.required"=>"Bidang Usaha Du/Di Wajib Diisi",
             "lokasi.required"=>"Lokasi Du/Di Wajib Diisi",
         ]);
-        $tpId = Tempat::with("user")->where("pembimbing_id",$validate["pembimbing_id"])->first();
-        if($request->input("pembimbing_id") !== $tpId?->pembimbing_id && $tpId){
+        $validate["pembimbing_id"] = $validate["pembimbing_id"] ?? null;
+        // Sebelumnya membandingkan string request dengan integer database
+        // (selalu berbeda), sehingga tempat tidak bisa disimpan ulang dengan
+        // pembimbingnya sendiri.
+        $tpId = $validate["pembimbing_id"] ? Tempat::with("user")->where("pembimbing_id",$validate["pembimbing_id"])->where("id","!=",$tempatId->id)->first() : null;
+        if($tpId){
             return redirect()->route("tempat.index")->with("error","Pembimbing {$tpId?->user?->name} Telah Membimbing Pt Lain");
         }
 
@@ -130,9 +146,8 @@ class TempatController extends Controller
     public function destroy(string $id)
     {
         $tempatId = Tempat::findOrFail($id);
-        if($tempatId){
-            $tempatId->delete();
-        }
+        // Siswa di tempat ini tidak lagi ikut terhapus (FK diubah ke SET NULL).
+        $tempatId->delete();
         return redirect()->route("tempat.index")->with("success","Berhasil Menghapus Tempat Du/Di");
     }
 }

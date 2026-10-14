@@ -30,7 +30,9 @@ class PembimbingController extends Controller
             });
         })
         ->when($request->filled("search"),function($query) use($request){
-            $query->where("users.name","like","%{$request->search}%")
+            // Dibungkus where(function) agar orWhere tidak membatalkan filter
+            // role di bawah (sebelumnya pencarian bisa menampilkan admin/siswa).
+            $query->where(fn($q) => $q->where("users.name","like","%{$request->search}%")
             ->orWhere("users.email","like","%{$request->search}%")
             ->orWhere("users.kontak","like","%{$request->search}%")
             ->orWhereHas("jurusan",function($q2) use($request){
@@ -38,19 +40,22 @@ class PembimbingController extends Controller
                 })
             ->orWhereHas("tahunAjaran",function($q2) use($request){
                 $q2->where("tahun", "like","%". $request->search . "%");
-            });
+            }));
         })
         ->when($request->input('sort_by') === "jurusan_id",function($query) use($request){
                 $query->join("jurusans","users.jurusan_id","=","jurusans.id")
-                ->orderBy("jurusans.nama",$request->input("sort_order","asc"))
+                ->orderBy("jurusans.nama",strtolower((string) $request->input("sort_order","asc")) === "desc" ? "desc" : "asc")
                 ->select("users.*");
         })
         ->when($request->input('sort_by') === "tahunAjaran_id",function($query) use($request){
                 $query->join("tahun_ajarans","users.tahunAjaran_id","=","tahun_ajarans.id")
-                ->orderBy("tahun_ajarans.tahun",$request->input("sort_order","asc"))
+                ->orderBy("tahun_ajarans.tahun",strtolower((string) $request->input("sort_order","asc")) === "desc" ? "desc" : "asc")
                 ->select("users.*");
         })
-        ->orderBy($request->input("sort_by","users.created_at"),$request->input("sort_order","desc"))
+        ->orderBy(
+            in_array($request->input("sort_by"), ["name","email","kontak","created_at","jurusan_id","tahunAjaran_id"], true) ? "users.".$request->input("sort_by") : "users.created_at",
+            strtolower((string) $request->input("sort_order","desc")) === "asc" ? "asc" : "desc"
+        )
         
         ->role(["pembimbing_pt","pembimbing_sekolah"])->paginate(10)->withQueryString();
         
@@ -82,11 +87,12 @@ class PembimbingController extends Controller
         $validate = $request->validate([
             "name"=>['required'],
             "email"=>['required', 'string', 'email',"unique:users,email"],
-            "jurusan_id"=>['nullable'],
-            "tahunAjaran_id"=>['nullable'],
+            "jurusan_id"=>['nullable','exists:jurusans,id'],
+            "tahunAjaran_id"=>['nullable','exists:tahun_ajarans,id'],
             "kontak"=>['required',"regex:/^0[0-9]{9,12}$/"],
-            "password"=>['required','string',"confirmed"],
-            "role"=>['required'],
+            "password"=>['required','string','min:8',"confirmed"],
+            // Sebelumnya role bebas, sehingga form pembimbing bisa membuat akun admin.
+            "role"=>['required',Rule::in(["pembimbing_pt","pembimbing_sekolah"])],
         ],[
             "nama.required"=>"Nama Wajib Diisi ",
             "email.required"=>"email Wajib Diisi",
@@ -94,14 +100,16 @@ class PembimbingController extends Controller
             "kontak.required"=>"Kontak Wajib Diisi",
             "kontak.regex"=>"Kontak Wajib 10 - 13 Karakter",
             "password.required"=>"Password Wajib Diisi",
+            "password.min"=>"Password Minimal 8 Karakter",
+            "role.in"=>"Role Harus Pembimbing PT atau Pembimbing Sekolah",
             "password.confirmed"=>"Konfirmasi Password Tidak Sama"
         ]);
 
         $user = User::create([
             "name"=> $validate["name"],
             "email"=> $validate["email"],
-            "jurusan_id"=> $validate["jurusan_id"],
-            "tahunAjaran_id"=> $validate["tahunAjaran_id"],
+            "jurusan_id"=> $validate["jurusan_id"] ?? null,
+            "tahunAjaran_id"=> $validate["tahunAjaran_id"] ?? null,
             "kontak"=> $validate["kontak"],
             "password"=> Hash::make($validate["password"]),
         ]);
@@ -137,21 +145,35 @@ class PembimbingController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $pbId = User::with("tempatYangDibimbing")->findOrFail($id);
+        $pbId = User::with("tempatYangDibimbing")->role(["pembimbing_pt","pembimbing_sekolah"])->findOrFail($id);
         $validate = $request->validate([
             "name"=>['required'],
             "email"=>['required', 'string', 'email',Rule::unique("users","email")->ignore($id)],
             "jurusan_id"=>['nullable','exists:jurusans,id'],
             "tahunAjaran_id"=>['nullable','exists:tahun_ajarans,id'],
             "kontak"=>['required',"regex:/^0[0-9]{9,12}$/"],
-            "role"=>['required'],
+            "role"=>['required',Rule::in(["pembimbing_pt","pembimbing_sekolah"])],
         ],[
             "nama.required"=>"Nama Wajib Diisi",
             "email.required"=>"email Wajib Diisi",
             "email.unique"=>"Email Telah Terdaftar",
             "kontak.required"=>"Kontak Wajib Diisi",
             "kontak.regex"=>"Kontak Wajib 10 - 13 Karakter",
+            "role.in"=>"Role Harus Pembimbing PT atau Pembimbing Sekolah",
         ]);
+
+        // Dicek sebelum menyimpan; sebelumnya data tetap tersimpan walau
+        // perubahan role ditolak.
+        if($validate["role"] === "pembimbing_sekolah"  &&
+            $pbId->hasRole("pembimbing_pt") &&
+            $pbId->tempatYangDibimbing){
+            return redirect()->route("pembimbing.edit",$id)->with("error","Pembimbing PT tidak bisa diubah ke role Pembimbing Sekolah karena sudah membimbing tempat PKL.");
+        }
+        if($validate["role"] === "pembimbing_pt" &&
+            $pbId->hasRole("pembimbing_sekolah") &&
+            User::where("pembimbing_sekolah_id",$pbId->id)->exists()){
+            return redirect()->route("pembimbing.edit",$id)->with("error","Pembimbing Sekolah tidak bisa diubah ke role Pembimbing PT karena masih memiliki siswa bimbingan.");
+        }
        
         $pbId->name = $validate["name"];
         $pbId->email = $validate["email"];
@@ -160,11 +182,6 @@ class PembimbingController extends Controller
         $pbId->kontak = $validate["kontak"];
         
         $pbId->save();
-        if($request->role === "pembimbing_sekolah"  &&
-            $pbId->hasRole("pembimbing_pt") &&
-            $pbId->tempatYangDibimbing){
-            return redirect()->route("pembimbing.edit",$id)->with("error","Pembimbing PT tidak bisa diubah ke role Pembimbing Sekolah karena sudah membimbing tempat PKL.");
-        }
         
         $pbId->syncRoles($validate["role"]);
         return redirect()->route("pembimbing.edit",$id)->with("success","Sukses Mengubah Data Pembimbing Milik $request->name");
@@ -175,7 +192,8 @@ class PembimbingController extends Controller
      */
     public function destroy(string $id)
     {
-        $pbId = User::findOrFail($id);
+        // Hanya akun pembimbing yang boleh dihapus lewat menu ini.
+        $pbId = User::role(["pembimbing_pt","pembimbing_sekolah"])->findOrFail($id);
         if($pbId){
             $pbId->delete();
         }

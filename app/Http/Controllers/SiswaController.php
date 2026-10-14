@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -32,7 +33,14 @@ class SiswaController extends Controller
             'tempat_id' => ['table' => 'tempats', 'foreign_key' => 'users.tempat_id', 'column' => 'tempats.nama'],
         ];
         $sortBy = $request->input('sort_by');
-        $sortOrder = $request->input('sort_order', 'asc');
+        $sortOrder = strtolower((string) $request->input('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
+        // Whitelist kolom urutan; sebelumnya sort_by/sort_order dari request
+        // langsung masuk ke orderBy().
+        $sortableColumns = ['name','email','kontak','created_at','updated_at','tempat_lahir','tanggal_lahir','jurusan_id','tahunAjaran_id','tempat_id'];
+        $orderColumn = in_array(str_replace('users.', '', (string) $sortBy), $sortableColumns, true)
+            ? 'users.'.str_replace('users.', '', (string) $sortBy)
+            : 'users.created_at';
+        $orderDirection = $request->filled('sort_order') ? $sortOrder : 'desc';
 
         if(Auth::user()->getRoleNames()->contains('siswa'))  {
             $cachedUsers = Cache::remember("siswa_" . Auth::id(), 3600 * 24 * 7, function () {
@@ -118,7 +126,7 @@ class SiswaController extends Controller
                     ->select('users.*');
         })
 
-        ->orderBy($request->input("sort_by","users.created_at"),$request->input("sort_order","desc"))
+        ->orderBy($orderColumn,$orderDirection)
         ->role("siswa")->paginate(10)->withQueryString();
         }
 
@@ -153,26 +161,27 @@ class SiswaController extends Controller
          
         $validate = $request->validated();
 
-        $dataSiswa = Datasiswa::where("nisn","=",$validate["nisn"])->first();
+        $dataSiswa = Datasiswa::where("nisn","=",$validate["nisn"])->firstOrFail();
 
-        $dataSiswa->isActive = true;
+        DB::transaction(function () use ($dataSiswa, $validate) {
+            $dataSiswa->isActive = true;
+            $dataSiswa->save();
 
-        $dataSiswa->save();
-
-        $siswa = User::create([
-            "name"=> $dataSiswa->nama,
-            "nisn_id"=> $dataSiswa->id,
-            'tempat_lahir' => $validate["tempat_lahir"],
-            'tanggal_lahir' => $validate["tanggal_lahir"],
-            "email"=> $validate["email"],
-            "jurusan_id"=> $validate["jurusan_id"],
-            "tahunAjaran_id"=> $validate["tahunAjaran_id"],
-            "pembimbing_sekolah_id"=> $validate["pembimbing_sekolah_id"],
-            "tempat_id"=> $validate["tempat_id"],
-            "kontak"=> $validate["kontak"],
-            "password"=> Hash::make($validate["password"]),
-        ]);
-        $siswa->syncRoles("siswa");
+            $siswa = User::create([
+                "name"=> $dataSiswa->nama,
+                "nisn_id"=> $dataSiswa->id,
+                'tempat_lahir' => $validate["tempat_lahir"],
+                'tanggal_lahir' => $validate["tanggal_lahir"],
+                "email"=> $validate["email"],
+                "jurusan_id"=> $validate["jurusan_id"],
+                "tahunAjaran_id"=> $validate["tahunAjaran_id"] ?? null,
+                "pembimbing_sekolah_id"=> $validate["pembimbing_sekolah_id"] ?? null,
+                "tempat_id"=> $validate["tempat_id"] ?? null,
+                "kontak"=> $validate["kontak"],
+                "password"=> Hash::make($validate["password"]),
+            ]);
+            $siswa->syncRoles("siswa");
+        });
 
         return redirect()->route("siswa.create")->with("success","Sukses Menambah Data Siswa Baru");
     }
@@ -191,7 +200,7 @@ class SiswaController extends Controller
     public function edit(string $id)
     {
           return Inertia::render("Siswa/Form",[
-            "user"=> User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","dataSiswa"])->role("siswa")->where("id","=",$id)->first(),
+            "user"=> User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","dataSiswa"])->role("siswa")->where("id","=",$id)->firstOrFail(),
             "pembimbing_sekolahs"=> User::with("roles")->role('pembimbing_sekolah')->get(),
             "dataSiswas"=>Datasiswa::get(),
             "jurusans"=>Jurusan::where("isActive","=","aktif")->get(),
@@ -206,9 +215,9 @@ class SiswaController extends Controller
      */
     public function update(SiswaRequest $request, string $id)
     {
-        $siswaId = User::findOrFail($id);
+        $siswaId = User::role("siswa")->findOrFail($id);
         $validate = $request->validated();
-        $dataSiswa = Datasiswa::where("nisn","=",$validate["nisn"])->first();
+        $dataSiswa = Datasiswa::where("nisn","=",$validate["nisn"])->firstOrFail();
         $siswaId->name = $dataSiswa->nama;
         $siswaId->nisn_id = $dataSiswa->id;
 
@@ -220,6 +229,9 @@ class SiswaController extends Controller
         $siswaId->jurusan_id =  $request->filled("jurusan_id") ?$validate["jurusan_id"]:$siswaId->jurusan_id;
         $siswaId->tempat_id =  $request->filled("tempat_id") ?$validate["tempat_id"]:$siswaId->tempat_id;
         $siswaId->kontak = $validate["kontak"];
+        if (!empty($validate["password"])) {
+            $siswaId->password = Hash::make($validate["password"]);
+        }
         
         $siswaId->save();
         Cache::forget("siswa_" . $siswaId->id);
@@ -231,13 +243,15 @@ class SiswaController extends Controller
      */
     public function destroy(string $id)
     {
-        $siswaId = User::with(["dataSiswa"])->findOrFail($id);
+        $siswaId = User::with(["dataSiswa"])->role("siswa")->findOrFail($id);
         // jgn hapus total, cukup nonaktifkan saja
-        if($siswaId){
-            $siswaId->dataSiswa->isActive = false;
-            $siswaId->dataSiswa->save();
+        DB::transaction(function () use ($siswaId) {
+            if ($siswaId->dataSiswa) {
+                $siswaId->dataSiswa->isActive = false;
+                $siswaId->dataSiswa->save();
+            }
             $siswaId->delete();
-        }
+        });
         Cache::forget("siswa_" . $siswaId->id);
         return redirect()->route("siswa.index")->with("success","Sukses Menghapus Data Siswa");
     }

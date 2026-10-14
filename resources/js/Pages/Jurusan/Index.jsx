@@ -1,454 +1,129 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
+import Badge from "@/Components/Badge";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import Filter from "@/Components/Filter";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import TextInput from "@/Components/TextInput";
-import InputLabel from "@/Components/InputLabel";
-import InputError from "@/Components/InputError";
 import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
-import TitleModal from "@/Components/TitleModal";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Filter from "@/Components/Filter";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
+import SecondaryButton from "@/Components/SecondaryButton";
+import Select from "@/Components/Select";
+import Spinner from "@/Components/Spinner";
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TextInput from "@/Components/TextInput";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { useListFilter } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Layers, Pencil, Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+
+const KOSONG = { nama: "", kepala: "", isActive: "aktif" };
+
+function JurusanModal({ show, jurusan, onClose }) {
+    const isEdit = Boolean(jurusan);
+    const { data, setData, post, put, processing, errors, clearErrors, setError } = useForm(KOSONG);
+
+    useEffect(() => {
+        if (!show) return;
+        clearErrors();
+        setData(isEdit ? { nama: jurusan.nama ?? "", kepala: jurusan.kepala ?? "", isActive: jurusan.isActive ?? "tidak" } : KOSONG);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show, jurusan?.id]);
+
+    const submit = (e) => {
+        e.preventDefault();
+        const err = {};
+        if (data.nama.trim().length < 3) err.nama = "Nama jurusan minimal 3 karakter";
+        if (!isEdit && data.kepala.trim().length < 3) err.kepala = "Nama kepala konsentrasi minimal 3 karakter";
+        if (Object.keys(err).length) return setError(err);
+        const opts = { preserveScroll: true, onSuccess: (page) => !page.props.auth?.flash?.error && onClose() };
+        if (isEdit) put(route("jurusan.update", jurusan.id), opts);
+        else post(route("jurusan.store"), opts);
+    };
+
+    return (
+        <Modal show={show} onClose={processing ? () => {} : onClose} maxWidth="lg">
+            <TitleModal title={isEdit ? "Ubah Jurusan" : "Tambah Jurusan"} description={jurusan?.nama} onClick={onClose} />
+            <form onSubmit={submit} noValidate>
+                <ModalBody className="space-y-4">
+                    <FormField label="Nama jurusan" htmlFor="nama" required error={errors.nama}>
+                        <TextInput id="nama" className="w-full" maxLength={50} value={data.nama} onChange={(e) => setData("nama", e.target.value)} invalid={!!errors.nama} placeholder="Contoh: Teknik Komputer dan Jaringan" />
+                    </FormField>
+                    <FormField label="Kepala konsentrasi keahlian" htmlFor="kepala" required={!isEdit} error={errors.kepala}>
+                        <TextInput id="kepala" className="w-full" maxLength={40} value={data.kepala} onChange={(e) => setData("kepala", e.target.value)} invalid={!!errors.kepala} />
+                    </FormField>
+                    <FormField label="Status" htmlFor="isActive" required error={errors.isActive} help="Hanya jurusan aktif yang bisa dipilih saat menambah siswa atau pembimbing.">
+                        <Select id="isActive" value={data.isActive} onChange={(e) => setData("isActive", e.target.value)}>
+                            <option value="aktif">Aktif</option>
+                            <option value="tidak">Tidak aktif</option>
+                        </Select>
+                    </FormField>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={onClose} disabled={processing}>Batal</SecondaryButton>
+                    <PrimaryButton disabled={processing}>{processing ? <Spinner /> : <Save />} Simpan</PrimaryButton>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
+export default function Index() {
     const { jurusans, filters } = usePage().props;
-    const [createModal, setCreateModal] = useState(false);
-    const [editModal, seteditModal] = useState(false);
-    const { data, setData, errors, post, processing, reset, put } = useForm({
-        nama: "",
-        kepala: "",
-        isActive: "tidak",
-    });
-    const { data: dataSearch, setData: setDataSearch } = useForm({
-        search: filters.search ?? "",
-    });
-    const handleDelete = (e, id, nama) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Jurusan ${nama}`;
-        const cb = () =>
-            router.delete(route("jurusan.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleStore = (e) => {
-        e.preventDefault();
-        post(route("jurusan.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    setCreateModal(false);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    setCreateModal(false);
-                }
-            },
-        });
-    };
+    const [form, setForm] = useState({ show: false, jurusan: null });
+    const { dataSearch, handleSearchChange } = useListFilter("jurusan.index", filters, []);
+    const rows = jurusans?.data ?? [];
 
-    const handleEdit = (e, id) => {
-        e.preventDefault();
-        const filtered = jurusans.data.find((jurusan) => jurusan.id === id);
-        if (filtered) {
-            setData("nama", filtered.nama);
-            setData("kepala", filtered?.kepala ?? "");
-            setData("isActive", filtered.isActive);
-            seteditModal(filtered);
-        }
-    };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        put(route("jurusan.update", editModal.id), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    seteditModal(null);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    seteditModal(null);
-                }
-            },
-        });
-    };
-    const handleSearchChange = (e) => {
-        e.preventDefault();
-        const { name, value } = e.target;
-        const update = {
-            ...dataSearch,
-            [name]: value,
-        };
-        setDataSearch(update);
-        const params = {};
-        if (update.search !== "") params.search = update.search;
+    const handleDelete = (j) =>
+        AlertConfirm(`Jurusan ${j.nama} akan dihapus.`, "warning", () => router.delete(route("jurusan.destroy", j.id), { preserveScroll: true }), "Ya, Hapus");
 
-        router.get(route("jurusan.index"), params, {
-            preserveState: true,
-            preserveScroll: true,
-        });
-    };
     return (
         <AuthenticatedLayout>
             <Head title="Jurusan" />
-            <ToastContainer className={`w-96`} />
-
-            <TitlePage
-                nameRoute={"Tambah Jurusan"}
-                quote={"list jurusan sistem rekap kegiatan pkl secara digital"}
-                title={"Jurusan"}
-                onClick={() => {
-                    setCreateModal(true);
-                    setData("nama", "");
-                    setData("kepala", "");
-                }}
-            ></TitlePage>
-            <Filter
-                isFilter={false}
-                value={dataSearch.search}
-                onChange={handleSearchChange}
-            />
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-                    <Table
-                        headers={[
-                            { nama: "#" },
-                            { nama: "Nama Jurusan" },
-                            { nama: "Kepala Konsentrasi" },
-                            { nama: "Keaktifan" },
-                            { nama: "Opsi" },
-                        ]}
-                    >
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Jurusan" quote="Konsentrasi keahlian beserta kepala konsentrasinya.">
+                    <PrimaryButton type="button" onClick={() => setForm({ show: true, jurusan: null })}>
+                        <Plus /> Tambah Jurusan
+                    </PrimaryButton>
+                </TitlePage>
+                <Card className="overflow-hidden">
+                    <Filter isFilter={false} value={dataSearch.search} onChange={handleSearchChange} placeholder="Cari nama jurusan..." />
+                    <Table headers={[{ nama: "#", className: "w-12" }, { nama: "Jurusan" }, { nama: "Kepala konsentrasi" }, { nama: "Status" }, { nama: "Aksi", className: "text-right" }]} minWidth="min-w-[600px]">
                         <tbody>
-                            {jurusans.data.length > 0 ? (
-                                jurusans.data.map((jurusan, index) => (
-                                    <tr
-                                        key={index}
-                                        className={`${
-                                            jurusan.isActive === "aktif"
-                                                ? "bg-blue-700 text-white border-white"
-                                                : "bg-white border-b  border-gray-200"
-                                        } border`}
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + jurusans.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {jurusan.nama}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {jurusan.kepala}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {jurusan.isActive === "aktif"
-                                                ? "Aktif"
-                                                : "Tidak Aktif"}
-                                        </td>
-
-                                        <td className="px-4">
-                                            <div className="flex justify-center items-center gap-2">
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleEdit(
-                                                            e,
-                                                            jurusan.id
-                                                        )
-                                                    }
-                                                    className={`${
-                                                        jurusan.isActive ===
-                                                        "aktif"
-                                                            ? "text-white"
-                                                            : " text-blue-600 hover:text-blue-500 "
-                                                    } font-medium cursor-pointer`}
-                                                >
-                                                    <Edit />
-                                                </div>
-                                                <Modal
-                                                    show={
-                                                        editModal?.id ===
-                                                        jurusan.id
-                                                    }
-                                                    onClose={() =>
-                                                        seteditModal(null)
-                                                    }
-                                                >
-                                                    <div className="relative bg-white rounded-lg shadow-sm ">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={`Edit Jurusan ${jurusan.nama}`}
-                                                            onClick={() =>
-                                                                seteditModal(
-                                                                    !editModal
-                                                                )
-                                                            }
-                                                        ></TitleModal>
-                                                        <form
-                                                            onSubmit={
-                                                                handleUpdate
-                                                            }
-                                                            className="p-4 md:p-5"
-                                                        >
-                                                            <div className="grid gap-4 mb-4 grid-cols-2">
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Nama Jurusan"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="nama"
-                                                                        type="text"
-                                                                        name="nama"
-                                                                        value={
-                                                                            data.nama
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "nama",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.nama
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Nama Kepala Konsentrasi Keahlian Dan Gelar (Jika Ada)"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="kepala"
-                                                                        type="text"
-                                                                        name="kepala"
-                                                                        value={
-                                                                            data.kepala
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "kepala",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.kepala
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Keaktifan"
-                                                                        }
-                                                                    />
-                                                                    <select
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "isActive",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        value={
-                                                                            data.isActive
-                                                                        }
-                                                                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                                                    >
-                                                                        <option
-                                                                            value={
-                                                                                "aktif"
-                                                                            }
-                                                                        >
-                                                                            Aktif
-                                                                        </option>
-                                                                        <option
-                                                                            value={
-                                                                                "tidak"
-                                                                            }
-                                                                        >
-                                                                            Tidak
-                                                                            Aktif
-                                                                        </option>
-                                                                    </select>
-
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.isActive
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            <PrimaryButton
-                                                                type="submit"
-                                                                className="gap-2"
-                                                                disabled={
-                                                                    processing
-                                                                }
-                                                            >
-                                                                <Edit />
-                                                                <span className="block">
-                                                                    {processing
-                                                                        ? "Proses..."
-                                                                        : "Ubah Jurusan"}
-                                                                </span>
-                                                            </PrimaryButton>
-                                                        </form>
-                                                    </div>
-                                                </Modal>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(
-                                                            e,
-                                                            jurusan.id,
-                                                            jurusan.nama
-                                                        )
-                                                    }
-                                                    className={`${
-                                                        jurusan.isActive ===
-                                                        "aktif"
-                                                            ? "text-white"
-                                                            : " text-red-800 hover:text-red-700 "
-                                                    } font-medium cursor-pointer`}
-                                                >
-                                                    <Trash />
-                                                </div>
+                            {rows.length > 0 ? (
+                                rows.map((j, index) => (
+                                    <Tr key={j.id}>
+                                        <Td className="text-slate-500">{index + (jurusans.from ?? 1)}</Td>
+                                        <Td className="font-medium text-slate-900">{j.nama}</Td>
+                                        <Td>{j.kepala || <span className="text-slate-400">Belum diisi</span>}</Td>
+                                        <Td>{j.isActive === "aktif" ? <Badge tone="emerald">Aktif</Badge> : <Badge>Tidak aktif</Badge>}</Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <IconButton label="Ubah jurusan" variant="primary" onClick={() => setForm({ show: true, jurusan: j })}>
+                                                    <Pencil />
+                                                </IconButton>
+                                                <IconButton label="Hapus jurusan" variant="danger" onClick={() => handleDelete(j)}>
+                                                    <Trash2 />
+                                                </IconButton>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Jurusan Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={5}>
+                                    <EmptyState icon={<Layers />} title={filters?.search ? "Jurusan tidak ditemukan" : "Belum ada jurusan"} />
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {jurusans.data.length > 0 && (
-                    <Pagination datas={jurusans}></Pagination>
-                )}
+                    <Pagination datas={jurusans} params={filters?.search ? { search: filters.search } : undefined} />
+                </Card>
             </div>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah Jurusan"}
-                        onClick={() => {
-                            setCreateModal(!createModal);
-                        }}
-                    ></TitleModal>
-                    <form onSubmit={handleStore} className="p-4 md:p-5">
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="col-span-2">
-                                <InputLabel value={"Nama Jurusan"} />
-                                <TextInput
-                                    id="nama"
-                                    type="text"
-                                    name="nama"
-                                    value={data.nama}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("nama", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.nama}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel
-                                    value={
-                                        "Nama Kepala Konsentrasi Keahlian Dan Gelar (Jika Ada)"
-                                    }
-                                />
-                                <TextInput
-                                    id="kepala"
-                                    type="text"
-                                    name="kepala"
-                                    value={data.kepala}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("kepala", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.kepala}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Keaktifan"} />
-                                <select
-                                    onChange={(e) =>
-                                        setData("isActive", e.target.value)
-                                    }
-                                    value={data.isActive}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option value={"aktif"}>Aktif</option>
-                                    <option value={"tidak"}>Tidak Aktif</option>
-                                </select>
-
-                                <InputError
-                                    message={errors.isActive}
-                                    className="mt-2"
-                                />
-                            </div>
-                        </div>
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing ? "Proses..." : "Tambah Jurusan"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
-            </Modal>
+            <JurusanModal show={form.show} jurusan={form.jurusan} onClose={() => setForm({ show: false, jurusan: form.jurusan })} />
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

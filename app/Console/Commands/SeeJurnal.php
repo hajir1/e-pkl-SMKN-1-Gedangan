@@ -20,14 +20,23 @@ class SeeJurnal extends Command
      *
      * @var string
      */
-    protected $description = 'Jurnal command to see the details of the jurnal automatically';
+    protected $description = 'Laporkan absensi minggu lalu yang belum diverifikasi admin/pembimbing';
 
     /**
      * Execute the console command.
      */
     public function handle()
     {
-        Jurnal::where("mark","=",false)->update(["mark" => true]);
-        Log::channel("marking")->info("Mark added At " . now()->format("d-m-Y h-i-s"));
+        // Sebelumnya perintah ini menandai SEMUA jurnal sebagai sudah dilihat
+        // setiap Senin, sehingga verifikasi oleh admin/pembimbing tidak ada
+        // artinya. Sekarang hanya mencatat absensi minggu lalu yang masih
+        // menunggu verifikasi.
+        $mingguLalu = Jurnal::awalMinggu()->subWeek()->toDateString();
+        $pending = Jurnal::whereDate("minggu_mulai", $mingguLalu)
+            ->where("status_verifikasi", Jurnal::STATUS_PENDING)
+            ->count();
+
+        Log::channel("marking")->info("Absensi minggu {$mingguLalu} yang belum diverifikasi: {$pending} (dicek " . now()->format("d-m-Y H:i:s") . ")");
+        $this->info("{$pending} absensi minggu {$mingguLalu} belum diverifikasi.");
     }
 }

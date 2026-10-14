@@ -13,7 +13,9 @@ use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rules;
@@ -31,21 +33,22 @@ class RegisteredUserController extends Controller
      */
    public function edit($id): RedirectResponse|Response
     {
-        $siswaId = Crypt::decrypt($id);
+        // Token yang dimanipulasi sebelumnya memicu DecryptException (error 500).
+        try {
+            $siswaId = Crypt::decrypt($id);
+        } catch (DecryptException) {
+            return redirect()->route("aktivasi")->with("error", "Link registrasi tidak valid.");
+        }
 
         $siswa = Datasiswa::find($siswaId);
 
-        if(!$siswa){
-            return redirect()->route("aktivasi");
-        }
-        $user = User::where("name", $siswa->nama)->first();
-         
-        if($siswa->isActive && $user){
-            return redirect()->route("login")->with("error", "Nomor Aktivasi telah di registrasi. Silahkan Login");
-        }
-
         if (!$siswa) {
             return redirect()->route("aktivasi")->with("error", "Data siswa tidak ditemukan.");
+        }
+
+        // Sebelumnya dicocokkan berdasarkan nama, padahal nama siswa bisa sama.
+        if(User::where("nisn_id", $siswa->id)->exists()){
+            return redirect()->route("login")->with("error", "Nomor Aktivasi telah di registrasi. Silahkan Login");
         }
 
         return Inertia::render('Auth/Register', [
@@ -67,18 +70,28 @@ class RegisteredUserController extends Controller
 
 
 
-        $response = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-        'secret' => env('VITE_SECRET_KEY'),
-        'response' => $request->input('g-recaptcha-response'),
-        ]);
+        try {
+            $response = Http::asForm()->timeout(10)->post('https://www.google.com/recaptcha/api/siteverify', [
+                'secret' => config('services.recaptcha.secret'),
+                'response' => $request->input('g-recaptcha-response'),
+                'remoteip' => $request->ip(),
+            ]);
+            $captchaOk = (bool) ($response->json('success') ?? false);
+        } catch (\Throwable $e) {
+            report($e);
+            $captchaOk = false;
+        }
 
-        if (!optional($response->json())['success']) {
+        if (!$captchaOk) {
         return back()->withErrors(['error' => 'Verifikasi CAPTCHA gagal.']);
         }
 
-        $regisId = Datasiswa::where("nisn",$request->nisn)->first();
+        $regisId = Datasiswa::where("nisn",$request->nisn)->firstOrFail();
 
-       
+        $user = DB::transaction(function () use ($request, $regisId) {
+        $regisId->isActive = true;
+        $regisId->save();
+
         $user = User::create([
             'name' => $regisId->nama,   
             'nisn_id' => $regisId->id,   
@@ -91,6 +104,9 @@ class RegisteredUserController extends Controller
             'password' => Hash::make($request->password),
         ]);
         $user->assignRole("siswa");
+
+        return $user;
+        });
 
         event(new Registered($user));
         

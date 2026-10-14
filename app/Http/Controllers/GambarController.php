@@ -7,8 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-use function PHPUnit\Framework\fileExists;
 
 class GambarController extends Controller
 {
@@ -18,25 +18,18 @@ class GambarController extends Controller
     public function index(Request $request)
     {
         
-
-        $allGambars = Cache::remember('welcome_gambars', 3600, function () {
-            return Gambar::latest()->get(); // Ambil semua data
+        // Kunci cache dipisah dari FeController: sebelumnya keduanya memakai
+        // 'welcome_gambars' dengan tipe data berbeda (paginator vs collection),
+        // sehingga halaman yang dibuka belakangan menerima data yang salah.
+        $page = max(1, $request->integer('page', 1));
+        $gambars = Cache::remember('admin_gambars_page_'.$page, 3600, function () {
+            return Gambar::latest()->paginate(30); // Ambil semua data
         });
 
-    // Step 2: Pagination manual
-        $perPage = 10;
-        $page = $request->input('page', 1);
-        $pagedGambars = new LengthAwarePaginator(
-            $allGambars->forPage($page, $perPage),
-            $allGambars->count(),
-            $perPage,
-            $page,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
+   
         // Step 3: Kirim ke Inertia
         return Inertia::render('Gambar/Index', [
-            'gambars' => $pagedGambars
+            'gambars' => $gambars
         ]);
     }
 
@@ -54,7 +47,7 @@ class GambarController extends Controller
     public function store(Request $request)
     {
          $validate = $request->validate([
-            "url"=>"required|file|max:2400|mimes:jpg,jpeg,avif,png"
+            "url"=>"required|file|max:2400|mimes:jpg,jpeg,avif,png|mimetypes:image/jpeg,image/png,image/avif"
         ],[
             "url.required"=>"Gambar Wajib Diisi",
             "url.mimes"=>"Gambar harus Bertipe Jpg,Jpeg,Avif,Png",
@@ -67,19 +60,21 @@ class GambarController extends Controller
             $sourcePath = $request->file('url')->store('headers', 'public');
 
             // backup path
-            $backupPath = env("BACKUP_PHOTOS") . $sourcePath;
+            $backupPath = config("filesystems.backup_photos") . $sourcePath;
 
-            if(!file_exists(dirname($backupPath))) {
-                mkdir(dirname($backupPath), 0777, true);
+            if(config("filesystems.backup_photos")){
+                File::ensureDirectoryExists(dirname($backupPath), 0755);
+                // Simpan juga ke folder backup
+                if(!copy(storage_path("app/public/".$sourcePath), $backupPath)){
+                    Storage::disk("public")->delete($sourcePath);
+                    return redirect()->back()->with("error","Gambar gagal disimpan");
+                }
             }
-            // Simpan juga ke folder backup
-            if(!File::copy(storage_path("app/public/".$sourcePath), $backupPath)){
-                return Inertia::render("Gambar/Index")->with("error","Gambar gagal disimpan");
-            };
+           
             $validate["url"] =  $sourcePath ?? null;
         }
         Gambar::create($validate);
-        Cache::forget('welcome_gambars');
+        $this->flushCache();
         return redirect()->back()->with("success","Sukses Menambah Slider / Gambar Baru");
     }
 
@@ -105,7 +100,7 @@ class GambarController extends Controller
     public function update(Request $request, string $id)
     {
         $request->validate([
-            "url"=>"required|file|max:2400|mimes:jpg,jpeg,avif,png"
+            "url"=>"required|file|max:2400|mimes:jpg,jpeg,avif,png|mimetypes:image/jpeg,image/png,image/avif"
         ],[
             "url.required"=>"Gambar Wajib Diisi",
             "url.mimes"=>"Gambar harus Bertipe Jpg,Jpeg,Avif,Png",
@@ -117,7 +112,7 @@ class GambarController extends Controller
             if ($gambarId->url) {
                 
             
-                $backupPath = env("BACKUP_PHOTOS") . $gambarId->url; // Lokasi kedua (backup)
+                $backupPath = config("filesystems.backup_photos") . $gambarId->url; // Lokasi kedua (backup)
 
                 // Hapus file di lokasi pertama (public)
                 if (File::exists(storage_path("app/public/". $gambarId->url))) {
@@ -125,29 +120,29 @@ class GambarController extends Controller
                 }
 
                 // Hapus file di lokasi kedua (backup)
-                if (File::exists($backupPath)) {
+                if (config("filesystems.backup_photos") && File::exists($backupPath)) {
                     File::delete($backupPath);
                 }
             }
 
             $sourcePath = $request->file('url')->store('headers', 'public'); //lokasi pertama
 
-            $backupPath = env("BACKUP_PHOTOS") . $sourcePath;
+            $backupPath = config("filesystems.backup_photos") . $sourcePath;
 
             // upload to public
 
-            if (!file_exists(dirname($backupPath))) {
-                mkdir(dirname($backupPath), 0777, true);
+            if (config("filesystems.backup_photos")) {
+                File::ensureDirectoryExists(dirname($backupPath), 0755);
+                // Simpan juga ke folder backup
+                if(!copy(storage_path("app/public/".$sourcePath), $backupPath)){
+                    return redirect()->back()->with("error","Kesalahan Server Mengenai Gambar , Coba Beberapa Saat Lagi");
+                }
             }
-            // Simpan juga ke folder backup
-            if(!File::copy(storage_path("app/public/".$sourcePath), $backupPath)){
-                return redirect()->back()->with("error","Kesalahan Server Mengenai Gambar , Coba Beberapa Saat Lagi");
-            };
 
             $gambarId->url =  $sourcePath ?? null;
         }
         $gambarId->save();
-        Cache::forget('welcome_gambars');
+        $this->flushCache();
 
         return redirect()->back()->with("success","Sukses Mengubah Gambar");
     }
@@ -160,17 +155,25 @@ class GambarController extends Controller
         $gmbrId = Gambar::findOrFail($id);
         
         if($gmbrId->url){
-            $backupPath = env("BACKUP_PHOTOS") . $gmbrId->url;
+            $backupPath = config("filesystems.backup_photos") . $gmbrId->url;
 
             if (File::exists(storage_path("app/public/". $gmbrId->url))) {
                     File::delete(storage_path("app/public/". $gmbrId->url));
             }
-            if(fileExists($backupPath)){
+            if(config("filesystems.backup_photos") && File::exists($backupPath)){
                 File::delete($backupPath);
             }
         }
         $gmbrId->delete();
-        Cache::forget('welcome_gambars');
+        $this->flushCache();
         return redirect()->back()->with("success","Sukses Menghapus Gambar");
+    }
+
+    private function flushCache(): void
+    {
+        Cache::forget('welcome_gambars');
+        for ($page = 1; $page <= 20; $page++) {
+            Cache::forget('admin_gambars_page_'.$page);
+        }
     }
 }

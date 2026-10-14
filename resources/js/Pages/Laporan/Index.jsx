@@ -1,183 +1,139 @@
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
+import Badge from "@/Components/Badge";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import IconButton from "@/Components/IconButton";
 import Pagination from "@/Components/Pagination";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import { Alert, AlertConfirm, AlertConfirmTwoOption } from "@/Helpers/Alert";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-import { useEffect } from "react";
-const Index = () => {
-    const { laporans } = usePage().props;
-    const handleDelete = (e, id, judul) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Judul Laporan ${judul}`;
-        const cb = () =>
-            router.delete(route("laporan.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "question", cb);
-    };
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { formatTanggal } from "@/Helpers/format";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { BookOpenText, CheckCircle2, Clock3, Plus, Trash2, XCircle } from "lucide-react";
+import { useState } from "react";
 
-    const handleEdit = (e, id) => {
-        e.preventDefault();
-        AlertConfirmTwoOption(
-            "Jika diterima, siswa akan menggunakan judul ini untuk laporan. Jika ditolak, siswa diminta untuk mengajukan revisi.",
-            "question",
-            (cb) => {
-                if (cb.isConfirmed) {
-                    router.put(
-                        route("laporan.update", id),
-                        {
-                            status: "terima",
-                        },
-                        {
-                            onSuccess: (sccs) => {
-                                if (sccs.props.auth.flash?.success) {
-                                    toast.success(
-                                        `${sccs.props.auth.flash?.success}`
-                                    );
-                                } else {
-                                    toast.error(
-                                        `${sccs.props.auth.flash?.error}`
-                                    );
-                                }
-                            },
-                        }
-                    );
-                } else if (cb.isDenied) {
-                    router.put(
-                        route("laporan.update", id),
-                        {
-                            status: "tolak",
-                        },
-                        {
-                            onSuccess: (sccs) => {
-                                if (sccs.props.auth.flash?.success) {
-                                    toast.success(
-                                        `${sccs.props.auth.flash?.success}`
-                                    );
-                                } else {
-                                    toast.error(
-                                        `${sccs.props.auth.flash?.error}`
-                                    );
-                                }
-                            },
-                        }
-                    );
-                }
+export const STATUS_LAPORAN = {
+    pending: { label: "Menunggu", tone: "amber", icon: <Clock3 /> },
+    terima: { label: "Diterima", tone: "emerald", icon: <CheckCircle2 /> },
+    tolak: { label: "Ditolak", tone: "rose", icon: <XCircle /> },
+};
+
+export function StatusLaporan({ status }) {
+    const s = STATUS_LAPORAN[status] ?? { label: status ?? "-", tone: "slate" };
+    return (
+        <Badge tone={s.tone} icon={s.icon}>
+            {s.label}
+        </Badge>
+    );
+}
+
+export default function Index() {
+    const { laporans, auth } = usePage().props;
+    const isSiswa = auth.role === "siswa";
+    const [prosesId, setProsesId] = useState(null);
+    const rows = laporans?.data ?? [];
+
+    const kirim = (lp, status) => {
+        const terima = status === "terima";
+        AlertConfirm(
+            terima
+                ? `Terima judul "${lp.judul}"? Siswa akan memakai judul ini untuk laporan PKL.`
+                : `Tolak judul "${lp.judul}"? Siswa akan diminta mengajukan judul baru.`,
+            terima ? "question" : "warning",
+            () => {
+                setProsesId(lp.id);
+                router.put(route("laporan.update", lp.id), { status }, { preserveScroll: true, onFinish: () => setProsesId(null) });
             },
-            "Terima"
+            terima ? "Ya, Terima" : "Ya, Tolak"
         );
     };
 
+    const hapus = (lp) =>
+        AlertConfirm(`Judul laporan "${lp.judul}" akan dihapus.`, "warning", () => router.delete(route("laporan.destroy", lp.id), { preserveScroll: true }), "Ya, Hapus");
+
     return (
         <AuthenticatedLayout>
-            <Head title="Laporan" />
-            <ToastContainer className={`w-96`} />
-
-            <TitlePage
-                quote={"list laporan sistem rekap kegiatan pkl secara digital"}
-                title={"Laporan"}
-            ></TitlePage>
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+            <Head title="Judul Laporan" />
+            <div className="space-y-6">
+                <TitlePage
+                    eyebrow="Laporan PKL"
+                    title={isSiswa ? "Judul Laporan Saya" : "Judul Laporan Siswa"}
+                    quote={isSiswa ? "Riwayat judul laporan yang pernah Anda ajukan." : "Tinjau judul laporan yang diajukan siswa, lalu terima atau tolak."}
+                >
+                    {isSiswa && (
+                        <Link
+                            href={route("laporan.create")}
+                            className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800"
+                        >
+                            <Plus className="h-4 w-4" /> Ajukan Judul
+                        </Link>
+                    )}
+                </TitlePage>
+                <Card className="overflow-hidden">
                     <Table
                         headers={[
-                            { nama: "#" },
-                            { nama: "Nama" },
+                            { nama: "#", className: "w-12" },
+                            ...(isSiswa ? [] : [{ nama: "Siswa" }]),
                             { nama: "Judul" },
-                            { nama: "Digunakan" },
-                            { nama: "Opsi" },
+                            { nama: "Status" },
+                            { nama: "Diajukan" },
+                            { nama: "Aksi", className: "text-right" },
                         ]}
+                        minWidth="min-w-[680px]"
                     >
                         <tbody>
-                            {laporans.data.length > 0 ? (
-                                laporans.data.map((lp, index) => (
-                                    <tr
-                                        key={index}
-                                        className="bg-white border-b  border-gray-200"
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + laporans.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {lp.user?.name}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {lp.judul}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            <div
-                                                className={`${
-                                                    lp.status === "pending" &&
-                                                    "bg-blue-200 text-blue-700 rounded-md outline-1 outline-blue-300 ring-2"
-                                                } ${
-                                                    lp.status === "terima" &&
-                                                    "bg-green-200 text-green-700 rounded-md outline outline-1"
-                                                } ${
-                                                    lp.status === "tolak" &&
-                                                    "bg-red-200 text-red-700 rounded-md outline-1 ring-2 ring-red-300 outline-red-600"
-                                                } inline-block px-2 py-1`}
-                                            >
-                                                {lp.status}
-                                            </div>
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            <div className=" flex justify-center items-center gap-2">
+                            {rows.length > 0 ? (
+                                rows.map((lp, index) => (
+                                    <Tr key={lp.id}>
+                                        <Td className="text-slate-500">{index + (laporans.from ?? 1)}</Td>
+                                        {!isSiswa && (
+                                            <Td>
+                                                <p className="font-medium text-slate-900">{lp.user?.name ?? "-"}</p>
+                                                <p className="text-xs text-slate-500">{lp.user?.tempat?.nama ?? "Belum ada tempat PKL"}</p>
+                                            </Td>
+                                        )}
+                                        <Td className="max-w-md">
+                                            <p className="text-slate-900">{lp.judul}</p>
+                                        </Td>
+                                        <Td>
+                                            <StatusLaporan status={lp.status} />
+                                        </Td>
+                                        <Td className="whitespace-nowrap text-slate-500">{formatTanggal(lp.created_at)}</Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                {!isSiswa && lp.status !== "terima" && (
+                                                    <IconButton label="Terima judul" variant="success" disabled={prosesId === lp.id} onClick={() => kirim(lp, "terima")}>
+                                                        <CheckCircle2 />
+                                                    </IconButton>
+                                                )}
+                                                {!isSiswa && lp.status === "pending" && (
+                                                    <IconButton label="Tolak judul" variant="danger" disabled={prosesId === lp.id} onClick={() => kirim(lp, "tolak")}>
+                                                        <XCircle />
+                                                    </IconButton>
+                                                )}
                                                 {lp.status !== "terima" && (
-                                                    <div
-                                                        onClick={(e) =>
-                                                            handleEdit(e, lp.id)
-                                                        }
-                                                        className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
-                                                    >
-                                                        <Edit />
-                                                    </div>
-                                                )}
-
-                                                {lp.status !==
-                                                    "terima" && (
-                                                    <div
-                                                        onClick={(e) =>
-                                                            handleDelete(
-                                                                e,
-                                                                lp.id,
-                                                                lp.judul
-                                                            )
-                                                        }
-                                                        className="font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer"
-                                                    >
-                                                        <Trash />
-                                                    </div>
+                                                    <IconButton label="Hapus judul" variant="danger" onClick={() => hapus(lp)}>
+                                                        <Trash2 />
+                                                    </IconButton>
                                                 )}
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Judul Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={isSiswa ? 5 : 6}>
+                                    <EmptyState
+                                        icon={<BookOpenText />}
+                                        title="Belum ada judul laporan"
+                                        description={isSiswa ? "Ajukan judul laporan PKL Anda untuk ditinjau pembimbing." : "Judul yang diajukan siswa bimbingan Anda akan tampil di sini."}
+                                    />
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {laporans.data.length > 0 && (
-                    <Pagination datas={laporans}></Pagination>
-                )}
+                    <Pagination datas={laporans} />
+                </Card>
             </div>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

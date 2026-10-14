@@ -1,618 +1,251 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import Filter from "@/Components/Filter";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { ArchiveRestore, Download, Edit, Plus, Trash, X } from "lucide-react";
-import TextInput from "@/Components/TextInput";
-import InputLabel from "@/Components/InputLabel";
-import InputError from "@/Components/InputError";
+import { OptionSorting } from "@/Components/Option";
 import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
-import TitleModal from "@/Components/TitleModal";
-import Swal from "sweetalert2";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Filter from "@/Components/Filter";
-import { OptionSorting } from "@/Components/Option";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
-    const { tempats, pembimbings, flash, filters } = usePage().props;
-    const [createModal, setCreateModal] = useState(false);
-    const [sortModal, setSortModal] = useState(false);
-    const [editModal, seteditModal] = useState(null);
-    const { data, setData, errors, post, processing, reset, put, setError } =
-        useForm({
-            nama: "",
-            kontak: "",
-            lokasi: "",
-            bidang_usaha: "",
-            pembimbing_id: "",
-        });
-    const { data: dataSearch, setData: setDataSearch } = useForm({
-        search: filters?.search ?? "",
-        sort_by: filters?.sort_by ?? "",
-        sort_order: filters?.sort_order ?? "",
-    });
-    const handleDelete = (e, id, nama) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Du/Di ${nama}`;
-        const cb = () =>
-            router.delete(route("tempat.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleStore = (e) => {
-        e.preventDefault();
-        post(route("tempat.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth?.flash?.success) {
-                    setCreateModal(false);
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    setCreateModal(false);
-                    reset();
-                }
-            },
-        });
-    };
+import SecondaryButton from "@/Components/SecondaryButton";
+import Select from "@/Components/Select";
+import Spinner from "@/Components/Spinner";
+import Table, { TableEmpty, Td, Tr } from "@/Components/Table";
+import TextInput from "@/Components/TextInput";
+import Textarea from "@/Components/Textarea";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { useListFilter } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Building2, FileDown, MapPin, Pencil, Phone, Plus, Save, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
-    const handleEdit = (e, id) => {
+const KOSONG = { nama: "", kontak: "", bidang_usaha: "", lokasi: "", pembimbing_id: "" };
+
+function TempatFormModal({ show, tempat, pembimbings, onClose }) {
+    const isEdit = Boolean(tempat);
+    const { data, setData, post, put, processing, errors, clearErrors, setError } = useForm(KOSONG);
+
+    useEffect(() => {
+        if (!show) return;
+        clearErrors();
+        setData(
+            isEdit
+                ? {
+                      nama: tempat.nama ?? "",
+                      kontak: tempat.kontak ?? "",
+                      bidang_usaha: tempat.bidang_usaha ?? "",
+                      lokasi: tempat.lokasi ?? "",
+                      pembimbing_id: tempat.pembimbing_id ?? "",
+                  }
+                : KOSONG
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show, tempat?.id]);
+
+    const set = (key) => (e) => setData(key, e.target.value);
+
+    // Pembimbing DU/DI hanya boleh membimbing satu tempat.
+    const tersedia = pembimbings.filter(
+        (p) => !p.tempat_yang_dibimbing || p.tempat_yang_dibimbing.id === tempat?.id
+    );
+
+    const submit = (e) => {
         e.preventDefault();
-        setError("bidang_usaha", "");
-        setError("kontak", "");
-        setError("lokasi", "");
-        setError("nama", "");
-        const filtered = tempats.data.find((tempat) => tempat.id === id);
-        if (filtered) {
-            setData("nama", filtered.nama);
-            setData("kontak", filtered.kontak);
-            setData("lokasi", filtered.lokasi);
-            setData("bidang_usaha", filtered.bidang_usaha);
-            setData("pembimbing_id", filtered.user?.id ?? "");
-            seteditModal(filtered);
+        const err = {};
+        ["nama", "kontak", "bidang_usaha", "lokasi"].forEach((k) => {
+            if (!String(data[k]).trim()) err[k] = "Wajib diisi";
+        });
+        if (Object.keys(err).length) {
+            setError(err);
+            return;
         }
-    };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        put(route("tempat.update", editModal.id), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth?.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-
-                    seteditModal(null);
-                    reset();
-                } else {
-                    seteditModal(null);
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                }
-            },
-        });
-    };
-    const handleSearchChange = (e) => {
-        e.preventDefault();
-        const { name, value } = e.target;
-        const update = {
-            ...dataSearch,
-            [name]: value,
-        };
-        setDataSearch(update);
-        const params = {};
-        if (update.search !== "") params.search = update.search;
-        if (update.sort_by !== "") params.sort_by = update.sort_by;
-        if (update.sort_by !== "" && update.sort_order !== "")
-            params.sort_order = update.sort_order;
-
-        router.get(route("tempat.index"), params, {
-            preserveState: true,
+        const opts = {
             preserveScroll: true,
-        });
+            onSuccess: (page) => {
+                if (!page.props.auth?.flash?.error) onClose();
+            },
+        };
+        if (isEdit) put(route("tempat.update", tempat.id), opts);
+        else post(route("tempat.store"), opts);
     };
+
+    return (
+        <Modal show={show} onClose={processing ? () => {} : onClose} maxWidth="2xl">
+            <TitleModal title={isEdit ? "Ubah Tempat PKL" : "Tambah Tempat PKL"} description={isEdit ? tempat?.nama : "Data DU/DI tempat siswa melaksanakan PKL."} onClick={onClose} />
+            <form onSubmit={submit} noValidate>
+                <ModalBody className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="Nama DU/DI" htmlFor="nama" required error={errors.nama} className="sm:col-span-2">
+                        <TextInput id="nama" className="w-full" value={data.nama} onChange={set("nama")} invalid={!!errors.nama} />
+                    </FormField>
+                    <FormField label="Kontak" htmlFor="kontak" required error={errors.kontak}>
+                        <TextInput id="kontak" inputMode="tel" className="w-full" value={data.kontak} onChange={set("kontak")} invalid={!!errors.kontak} />
+                    </FormField>
+                    <FormField label="Bidang usaha" htmlFor="bidang_usaha" required error={errors.bidang_usaha}>
+                        <TextInput id="bidang_usaha" className="w-full" value={data.bidang_usaha} onChange={set("bidang_usaha")} invalid={!!errors.bidang_usaha} />
+                    </FormField>
+                    <FormField label="Alamat / lokasi" htmlFor="lokasi" required error={errors.lokasi} className="sm:col-span-2">
+                        <Textarea id="lokasi" rows={2} value={data.lokasi} onChange={set("lokasi")} invalid={!!errors.lokasi} />
+                    </FormField>
+                    <FormField
+                        label="Pembimbing DU/DI"
+                        htmlFor="pembimbing_id"
+                        error={errors.pembimbing_id}
+                        className="sm:col-span-2"
+                        help="Hanya pembimbing yang belum membimbing tempat lain yang ditampilkan."
+                    >
+                        <Select id="pembimbing_id" value={data.pembimbing_id} onChange={set("pembimbing_id")}>
+                            <option value="">Belum ditentukan</option>
+                            {tersedia.map((p) => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </Select>
+                    </FormField>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={onClose} disabled={processing}>Batal</SecondaryButton>
+                    <PrimaryButton disabled={processing}>
+                        {processing ? <Spinner /> : <Save />} Simpan
+                    </PrimaryButton>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
+export default function Index() {
+    const { tempats, pembimbings = [], filters } = usePage().props;
+    const [sortModal, setSortModal] = useState(false);
+    const [form, setForm] = useState({ show: false, tempat: null });
+    const { dataSearch, handleSearchChange, resetFilter, activeCount } = useListFilter("tempat.index", filters, []);
+    const rows = tempats?.data ?? [];
+
+    const handleDelete = (t) =>
+        AlertConfirm(
+            `Tempat ${t.nama} akan dihapus. Siswa yang terdaftar di tempat ini tidak ikut terhapus, tetapi tidak lagi memiliki tempat PKL.`,
+            "warning",
+            () => router.delete(route("tempat.destroy", t.id), { preserveScroll: true }),
+            "Ya, Hapus"
+        );
+
     return (
         <AuthenticatedLayout>
-            <Head title="Tempat Du/Di" />
-            <ToastContainer className={`w-96`} />
+            <Head title="Tempat PKL" />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Tempat PKL (DU/DI)" quote="Daftar dunia usaha / dunia industri tempat siswa melaksanakan PKL.">
+                    <PrimaryButton type="button" onClick={() => setForm({ show: true, tempat: null })}>
+                        <Plus /> Tambah Tempat
+                    </PrimaryButton>
+                </TitlePage>
 
-            <TitlePage
-                nameRoute={"Tambah Tempat"}
-                quote={
-                    "list tempat du/di sistem rekap kegiatan pkl secara digital"
-                }
-                title={"tempat Du/Di"}
-                onClick={() => {
-                    setCreateModal(true);
-                    setData("nama", "");
-                    setData("lokasi", "");
-                    setData("kontak", "");
-                    setData("bidang_usaha", "");
-                    setData("pembimbing_id", "");
-                }}
-            ></TitlePage>
-            <Filter
-                sortModal={sortModal}
-                value={dataSearch.search}
-                onChange={handleSearchChange}
-                setSortModal={setSortModal}
-            />
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
+                <Card className="overflow-hidden">
+                    <Filter
+                        sortModal={sortModal}
+                        setSortModal={setSortModal}
+                        value={dataSearch.search}
+                        onChange={handleSearchChange}
+                        activeCount={activeCount}
+                        placeholder="Cari nama, bidang usaha, lokasi..."
+                    />
                     <Table
                         headers={[
-                            { nama: "#" },
-                            { nama: "Nama PT" },
-                            { nama: "Kontak" },
-                            { nama: "Bidang Usaha" },
+                            { nama: "#", className: "w-12" },
+                            { nama: "Tempat" },
                             { nama: "Lokasi" },
-                            { nama: "Nama pembimbing" },
-                            { nama: "Opsi" },
+                            { nama: "Kontak" },
+                            { nama: "Pembimbing DU/DI" },
+                            { nama: "Aksi", className: "text-right" },
                         ]}
+                        minWidth="min-w-[800px]"
                     >
                         <tbody>
-                            {tempats.data.length > 0 ? (
-                                tempats.data.map((tempat, index) => (
-                                    <tr
-                                        key={index}
-                                        className="bg-white border-b  border-gray-200"
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + tempats.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {tempat.nama}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {tempat.kontak}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {tempat.bidang_usaha}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {tempat.lokasi ?? ""}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {`${
-                                                tempat.user?.name ??
-                                                "Belum Diisi"
-                                            }`}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center gap-2">
-                                                {" "}
-                                                <a
-                                                    href={route(
-                                                        "tempat.export",
-                                                        tempat?.id
-                                                    )}
-                                                    target="_blank"
-                                                    className="font-medium text-green-600 hover:text-green-500 cursor-pointer"
-                                                >
-                                                    <ArchiveRestore />
-                                                </a>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleEdit(e, tempat.id)
-                                                    }
-                                                    className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
-                                                >
-                                                    <Edit />
-                                                </div>
-                                                <Modal
-                                                    show={
-                                                        editModal?.id ===
-                                                        tempat.id
-                                                    }
-                                                    onClose={() =>
-                                                        seteditModal(null)
-                                                    }
-                                                >
-                                                    <div className="relative bg-white rounded-lg shadow-sm ">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={`Edit Du/Di ${tempat.nama}`}
-                                                            onClick={() =>
-                                                                seteditModal(
-                                                                    !editModal
-                                                                )
-                                                            }
-                                                        ></TitleModal>
-                                                        <form
-                                                            onSubmit={
-                                                                handleUpdate
-                                                            }
-                                                            className="p-4 md:p-5"
-                                                        >
-                                                            <div className="grid gap-4 mb-4 grid-cols-2">
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Nama Jurusan"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="nama"
-                                                                        type="text"
-                                                                        name="nama"
-                                                                        value={
-                                                                            data.nama
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "nama",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.nama
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Kontak"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="kontak"
-                                                                        type="text"
-                                                                        name="kontak"
-                                                                        value={
-                                                                            data.kontak
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "kontak",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.kontak
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Bidang Usaha"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="bidang_usaha"
-                                                                        type="text"
-                                                                        name="bidang_usaha"
-                                                                        value={
-                                                                            data.bidang_usaha
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "bidang_usaha",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.bidang_usaha
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Lokasi Du/Di"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="lokasi"
-                                                                        type="text"
-                                                                        name="lokasi"
-                                                                        value={
-                                                                            data.lokasi
-                                                                        }
-                                                                        className="mt-1 block w-full"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "lokasi",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.lokasi
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Pilih Pembimbing"
-                                                                        }
-                                                                    />
-                                                                    <select
-                                                                        onChange={(
-                                                                            e
-                                                                        ) =>
-                                                                            setData(
-                                                                                "pembimbing_id",
-                                                                                e
-                                                                                    .target
-                                                                                    .value
-                                                                            )
-                                                                        }
-                                                                        value={
-                                                                            data.pembimbing_id
-                                                                        }
-                                                                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                                                    >
-                                                                        <option value="">
-                                                                            Default
-                                                                        </option>
-
-                                                                        {pembimbings.length >
-                                                                            0 &&
-                                                                            pembimbings.map(
-                                                                                (
-                                                                                    pb
-                                                                                ) => (
-                                                                                    <option
-                                                                                        key={
-                                                                                            pb.id
-                                                                                        }
-                                                                                        value={
-                                                                                            pb.id
-                                                                                        }
-                                                                                    >
-                                                                                        {`${
-                                                                                            pb.name
-                                                                                        } - ${
-                                                                                            pb
-                                                                                                ?.tempat_yang_dibimbing
-                                                                                                ?.nama ??
-                                                                                            "belum membimbing"
-                                                                                        }`}
-                                                                                    </option>
-                                                                                )
-                                                                            )}
-                                                                    </select>
-
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.pembimbing_id
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                            </div>
-
-                                                            <PrimaryButton
-                                                                type="submit"
-                                                                className="gap-2"
-                                                                disabled={
-                                                                    processing
-                                                                }
-                                                            >
-                                                                <Edit />
-                                                                {processing
-                                                                    ? "Proses..."
-                                                                    : "Ubah Data"}
-                                                            </PrimaryButton>
-                                                        </form>
-                                                    </div>
-                                                </Modal>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(
-                                                            e,
-                                                            tempat.id,
-                                                            tempat.nama
-                                                        )
-                                                    }
-                                                    className="font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer"
-                                                >
-                                                    <Trash />
-                                                </div>
+                            {rows.length > 0 ? (
+                                rows.map((t, index) => (
+                                    <Tr key={t.id}>
+                                        <Td className="text-slate-500">{index + (tempats.from ?? 1)}</Td>
+                                        <Td>
+                                            <p className="font-medium text-slate-900">{t.nama}</p>
+                                            <p className="text-xs text-slate-500">{t.bidang_usaha}</p>
+                                        </Td>
+                                        <Td className="max-w-xs">
+                                            <p className="flex items-start gap-1.5 text-slate-700">
+                                                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                                <span className="line-clamp-2">{t.lokasi}</span>
+                                            </p>
+                                        </Td>
+                                        <Td className="whitespace-nowrap">
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <Phone className="h-3.5 w-3.5 text-slate-400" /> {t.kontak}
+                                            </span>
+                                        </Td>
+                                        <Td>{t.user?.name ?? <span className="text-slate-400">Belum ditentukan</span>}</Td>
+                                        <Td>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <IconButton label="Unduh PDF daftar siswa" href={route("tempat.export", t.id)} external>
+                                                    <FileDown />
+                                                </IconButton>
+                                                <IconButton label="Ubah tempat" variant="primary" onClick={() => setForm({ show: true, tempat: t })}>
+                                                    <Pencil />
+                                                </IconButton>
+                                                <IconButton label="Hapus tempat" variant="danger" onClick={() => handleDelete(t)}>
+                                                    <Trash2 />
+                                                </IconButton>
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </Td>
+                                    </Tr>
                                 ))
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Tempat Du/Di Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={6}>
+                                    {activeCount > 0 || filters?.search ? (
+                                        <EmptyState
+                                            title="Tidak ada tempat yang cocok"
+                                            description="Coba ubah kata kunci atau atur ulang urutan."
+                                            action={<SecondaryButton onClick={resetFilter}>Atur ulang</SecondaryButton>}
+                                        />
+                                    ) : (
+                                        <EmptyState
+                                            icon={<Building2 />}
+                                            title="Belum ada tempat PKL"
+                                            action={
+                                                <PrimaryButton type="button" onClick={() => setForm({ show: true, tempat: null })}>
+                                                    <Plus /> Tambah Tempat
+                                                </PrimaryButton>
+                                            }
+                                        />
+                                    )}
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {tempats.data.length > 0 && (
-                    <Pagination datas={tempats}></Pagination>
-                )}
+                    <Pagination datas={tempats} />
+                </Card>
             </div>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah Tempat Du/Di"}
-                        onClick={() => setCreateModal(!createModal)}
-                    ></TitleModal>
-                    <form onSubmit={handleStore} className="p-4 md:p-5">
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="col-span-2">
-                                <InputLabel value={"Nama Tempat"} />
-                                <TextInput
-                                    id="nama"
-                                    type="text"
-                                    name="nama"
-                                    value={data.nama}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("nama", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.nama}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Kontak"} />
-                                <TextInput
-                                    id="kontak"
-                                    type="number"
-                                    name="kontak"
-                                    value={data.kontak}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("kontak", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.kontak}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Bidang Usaha"} />
-                                <TextInput
-                                    id="bidang_usaha"
-                                    type="text"
-                                    name="bidang_usaha"
-                                    value={data.bidang_usaha}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("bidang_usaha", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.bidang_usaha}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Lokasi Du/Di"} />
-                                <TextInput
-                                    id="lokasi"
-                                    type="text"
-                                    name="lokasi"
-                                    value={data.lokasi}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("lokasi", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.lokasi}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Pilih Pembimbing"} />
-                                <select
-                                    onChange={(e) =>
-                                        setData("pembimbing_id", e.target.value)
-                                    }
-                                    value={data.pembimbing_id}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option value="">Default</option>
 
-                                    {pembimbings.length > 0 &&
-                                        pembimbings.map((pb) => (
-                                            <option key={pb.id} value={pb.id}>
-                                                {`${pb.name} - ${
-                                                    pb?.tempat_yang_dibimbing
-                                                        ?.nama ??
-                                                    "belum membimbing"
-                                                }`}
-                                            </option>
-                                        ))}
-                                </select>
+            <TempatFormModal show={form.show} tempat={form.tempat} pembimbings={pembimbings} onClose={() => setForm({ show: false, tempat: form.tempat })} />
 
-                                <InputError
-                                    message={errors.pembimbing_id}
-                                    className="mt-2"
-                                />
-                            </div>
-                        </div>
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing ? "Proses..." : "Tambah Tempat"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
-            </Modal>
-            <Modal show={sortModal} onClose={() => setSortModal(!sortModal)}>
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Filter Tempat"}
-                        onClick={() => {
-                            setSortModal(!sortModal);
-                        }}
-                    ></TitleModal>
+            <Modal show={sortModal} onClose={() => setSortModal(false)} maxWidth="lg">
+                <TitleModal title="Urutkan Tempat PKL" onClick={() => setSortModal(false)} />
+                <ModalBody>
                     <OptionSorting
                         dataSearch={dataSearch}
                         handleSearchChange={handleSearchChange}
                         datas={[
-                            { name: "Default", value: "" },
+                            { name: "Bawaan (terbaru)", value: "" },
                             { name: "Nama", value: "nama" },
                             { name: "Kontak", value: "kontak" },
-                            { name: "Bidang Usaha", value: "bidang_usaha" },
-                            { name: "Lokasi", value: "Lokasi" },
-                            { name: "Nama Pembimbing", value: "pembimbing_id" },
+                            { name: "Bidang usaha", value: "bidang_usaha" },
+                            { name: "Lokasi", value: "lokasi" },
+                            { name: "Tanggal dibuat", value: "created_at" },
                         ]}
                     />
-                </div>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={resetFilter}>Atur ulang</SecondaryButton>
+                    <PrimaryButton type="button" onClick={() => setSortModal(false)}>Selesai</PrimaryButton>
+                </ModalFooter>
             </Modal>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

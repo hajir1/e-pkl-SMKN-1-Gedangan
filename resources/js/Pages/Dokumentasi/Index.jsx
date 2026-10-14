@@ -1,440 +1,155 @@
+import Card, { CardBody, CardHeader } from "@/Components/Card";
+import TitlePage from "@/Components/TitlePage";
+import { assetUrl, roleLabel } from "@/Helpers/format";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, usePage } from "@inertiajs/react";
-import React, { useEffect } from "react";
+import { BookOpenText, Building2, CalendarCheck2, ClipboardCheck, Database, LogOut, UserRound } from "lucide-react";
 
-const Dashboard = () => {
+const AKUN = {
+    icon: <UserRound />,
+    title: "Akun",
+    items: ["Email dan password bisa diubah di menu Profil Saya.", "Setelah selesai, selalu pilih Keluar agar sesi login dihapus, terutama di perangkat bersama."],
+};
+
+const LAPORAN_PEMBIMBING = {
+    icon: <BookOpenText />,
+    title: "Judul laporan",
+    items: [
+        "Admin, pembimbing sekolah, dan pembimbing DU/DI dapat menerima atau menolak judul laporan siswa.",
+        "Jika diterima, siswa dapat mulai menyusun laporan. Jika ditolak, siswa diminta mengajukan judul revisi.",
+    ],
+    image: "img/sampleLaporan.png",
+};
+
+const VERIFIKASI = {
+    icon: <ClipboardCheck />,
+    title: "Verifikasi absensi mingguan",
+    items: [
+        "Siswa mengirim satu absensi setiap minggu (Senin sampai Minggu) dengan lampiran PDF.",
+        "Buka menu Absensi, pilih tab Menunggu, lalu periksa PDF bukti setiap siswa.",
+        "Pilih Setujui, atau Tolak dengan catatan alasan. Siswa dapat memperbaiki absensi yang ditolak.",
+        "Dashboard menampilkan jumlah absensi yang menunggu verifikasi dan siswa yang sudah absen minggu ini.",
+    ],
+};
+
+const NILAI = {
+    icon: <ClipboardCheck />,
+    title: "Nilai akhir",
+    items: ["Nilai diberikan di menu Siswa pada akhir masa PKL.", "Setiap pembimbing hanya bisa memberi nilai satu kali dan nilai tidak dapat diubah."],
+};
+
+const PANDUAN = {
+    siswa: [
+        {
+            icon: <UserRound />,
+            title: "Aktivasi dan login",
+            items: [
+                "Buka halaman Aktivasi Akun dan masukkan nomor aktivasi (nomor induk + kode jurusan).",
+                "Jika nomor tidak ditemukan, hubungi admin atau pembimbing sekolah.",
+                "Lengkapi data registrasi, lalu masuk dengan email dan password yang Anda buat.",
+            ],
+        },
+        {
+            icon: <CalendarCheck2 />,
+            title: "Absensi mingguan",
+            items: [
+                "Absensi dikirim satu kali setiap minggu, paling lambat Minggu pukul 23.59.",
+                "Pilih keterangan (hadir, izin, atau sakit), tulis ringkasan kegiatan, dan lampirkan PDF absensi (maks. 5 MB). Foto kegiatan bersifat opsional.",
+                "Absensi bisa diubah selama belum disetujui. Jika ditolak, baca catatan pembimbing lalu perbaiki.",
+                "Absensi yang dihapus masuk ke Sampah dan bisa dipulihkan.",
+            ],
+        },
+        {
+            icon: <BookOpenText />,
+            title: "Laporan PKL",
+            items: [
+                "Ajukan judul laporan yang unik (tidak boleh sama dengan siswa lain).",
+                "Jika judul ditolak, ajukan judul revisi. Jika diterima, unduh format penulisan dan rekap laporan.",
+            ],
+        },
+        {
+            icon: <Building2 />,
+            title: "Pengajuan tempat PKL",
+            items: [
+                "Ajukan tempat dari daftar sekolah atau usulkan tempat sendiri.",
+                "Pengajuan ditinjau admin. Jika diterima, Anda otomatis ditempatkan di tempat tersebut dan sekolah akan menghubungi Anda.",
+            ],
+        },
+        AKUN,
+    ],
+    pembimbing: [
+        {
+            icon: <UserRound />,
+            title: "Login dan dashboard",
+            items: ["Masuk dengan akun yang dibuat oleh admin.", "Dashboard menampilkan siswa bimbingan, absensi yang menunggu verifikasi, dan status absensi minggu ini."],
+        },
+        VERIFIKASI,
+        LAPORAN_PEMBIMBING,
+        NILAI,
+        AKUN,
+    ],
+    admin: [
+        {
+            icon: <Database />,
+            title: "Data master",
+            items: [
+                "Data NISN siswa wajib diisi lebih dulu (import Excel atau manual) agar siswa bisa aktivasi akun. Data yang sudah dipakai akun tidak bisa dihapus.",
+                "Kelola jurusan dan tahun ajaran; hanya data berstatus aktif yang bisa dipilih saat registrasi.",
+                "Kelola tempat PKL (DU/DI). Satu tempat hanya bisa memiliki satu pembimbing DU/DI.",
+                "Tambahkan akun pembimbing sekolah, pembimbing DU/DI, dan siswa. Siswa yang ditambahkan admin tidak perlu aktivasi.",
+                "Kelola gambar slider halaman depan.",
+            ],
+        },
+        {
+            icon: <Building2 />,
+            title: "Pengajuan tempat",
+            items: [
+                "Tinjau pengajuan tempat dari siswa. Menerima pengajuan otomatis menempatkan siswa, dan tempat baru otomatis ditambahkan ke daftar DU/DI.",
+                "Informasikan keputusan kepada siswa secara langsung atau melalui kontak yang terdaftar.",
+            ],
+        },
+        VERIFIKASI,
+        LAPORAN_PEMBIMBING,
+        AKUN,
+    ],
+};
+
+export default function Dokumentasi() {
     const { auth } = usePage().props;
+    const kunci = auth.role === "siswa" ? "siswa" : auth.role === "admin" ? "admin" : "pembimbing";
+    const bagian = PANDUAN[kunci];
+
     return (
         <AuthenticatedLayout>
-            <Head title="Dashboard" />
-            <h1 className="text-2xl font-bold mt-8 text-slate-900 text-center">
-                Panduan Aplikasi untuk {auth.role.replace(/_/g, " ")}
-            </h1>
-            <div className="flex justify-center mt-8 p-2">
-                {auth.role === "siswa" && (
-                    <div className="w-full md:w-4/5">
-                        <ol className="list-decimal pl-5 space-y-2">
-                            <li>
-                                ketika pertama kali buka halaman registrasi{" "}
-                                {auth.user.name} akan di arahkan ke nomor
-                                verifikasi siswa .
-                            </li>
-                            <li>
-                                Pastikan nomor verifikasi telah terdaftar di
-                                database. Jika Tidak ditemukan , silahkan
-                                hubungi admin/pembimbing untuk proses lebih
-                                lanjut
-                            </li>
-                            <li>
-                                Jika nomor registrasi ada , {auth.user.name}{" "}
-                                akan diarahkan ke halaman register .
-                            </li>
-                            <li>
-                                Silahkan registrasi akun di halaman tersebut
-                            </li>
-                            <li>
-                                Login dengan user yang {auth.user.name} telah
-                                daftarkan.
-                            </li>
-                            <li>
-                                Jika berhasil, {auth.user.name} akan Masuk ke
-                                dashboard.
-                            </li>
-                            <li>
-                                {auth.user.name} bisa memantau jumlah kehadiran
-                                setiap hari di halaman dashboard
-                            </li>
-                            <li>
-                                {auth.user.name} juga bisa mendapatkan panduan
-                                laporan dan halaman awal di website{" "}
-                                <b>e-pkl-v2</b> mendatang
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.user.name} juga bisa membuat judul
-                                    laporan yeng bersifat unik , yang artinya
-                                    judul tidak boleh sama dengan siswa lainnya{" "}
-                                    <b>(semakin cepat semakin baik)</b>
-                                </b>
-                            </li>
-                            <li>
-                                jika judul di tolak oleh pembimbing ,maka siswa
-                                akan di arahkan ke halaman revisi
-                            </li>
-
-                            <li>
-                                jika judul di terima oleh pembimbing ,maka siswa
-                                bisa memulai membuat laporan dengan referensi
-                                yang ada pada website <b>epkl</b>
-                            </li>
-
-                            <li>
-                                {auth.user.name} bisa mengajukan lokasi pkl jika
-                                dirasa saat ini tidak cocok dengan diri pribadi.
-                            </li>
-                            <li>
-                                Pengajuan lokasi perlu persetujuan admin , jika
-                                disetujui , admin akan memberi informasi secara
-                                langsung atau dari nomor wa yang telah terdaftar
-                            </li>
-                            <li>
-                                {auth.user.name} bisa menambah jurnal &nbsp;
-                                <b> yang hanya bisa diisi 1x setiap hari</b>
-                            </li>
-                            <li>
-                                <b>
-                                    Jurnal akan di pantau setiap hari oleh
-                                    pembimbing sekolah dan pembimbing pt ,
-                                    pastikan jurnal dikirim sebaik mungkin
-                                </b>
-                            </li>
-                            <li>
-                                <b>Nilai akan diisi pada akhir proses magang</b>
-                            </li>
-                            <li>
-                                {auth.user.name} bisa mengubah email dan
-                                password di halaman edit akun
-                            </li>
-                            <li>
-                                Setelah semua telah dikerjakan , pastikan untuk
-                                logout
-                                <b>
-                                    {" "}
-                                    agar data pengguna bisa di hapus dari
-                                    session,
-                                </b>
-                                &nbsp;karena session memungkinkan user bisa
-                                langsung masuk ke dashboard tanpa login pada
-                                kunjungan berikutnya
-                            </li>
-                        </ol>
-                    </div>
-                )}
-                {auth.role === "pembimbing_sekolah" && (
-                    <div className="w-full md:w-4/5">
-                        <ol className="list-decimal pl-5 space-y-2">
-                            <li>
-                                {auth.role.replace(/_/g, " ")} Login dengan user
-                                yang telah dibuatkan oleh admin
-                            </li>
-                            <li>
-                                Jika berhasil, {auth.role.replace(/_/g, " ")}{" "}
-                                akan Masuk ke dashboard.
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa memantau
-                                jumlah kehadiran siswa setiap hari di halaman
-                                dashboard
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} mempunyai
-                                    data siswa yang di bimbing
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Admin ,Pembimbing Pt DuDi , dan Pembimbing
-                                    Sekolah berhak menyetujui / menolak Judul
-                                    laporan yang di buat oleh siswa
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Jika disetujui , siswa dapat memulai membuat
-                                    laporan , dan jika ditolak maka siswa harus
-                                    membuat revisi judul
-                                </b>
-                            </li>
-                            <li>
-                                <img
-                                    src="./img/sampleLaporan.png"
-                                    className="w-full h-auto"
-                                    alt=""
-                                    srcSet=""
-                                />
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} mengetahui
-                                    seluruh jurnal yang telah dikirim oleh siswa
-                                    yang di bimbingnya
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Untuk menandai telah membaca jurnal yang
-                                    dikirim siswa,{" "}
-                                    {auth.role.replace(/_/g, " ")} bisa meng
-                                    klik tombol yang ada pada kolom mark
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa memberi
-                                nilai pada siswa pada akhir masa pkl.
-                                <b> Nilai hanya bisa diisi 1x per semester</b>
-                            </li>
-                            <li>
-                                {auth.user.name} bisa mengubah email dan
-                                password di halaman edit akun
-                            </li>
-                            <li>
-                                Setelah semua telah dikerjakan , pastikan untuk
-                                logout
-                                <b>
-                                    {" "}
-                                    agar data pengguna bisa di hapus dari
-                                    session,
-                                </b>
-                                &nbsp; karena session memungkinkan user bisa
-                                langsung masuk ke dashboard tanpa login pada
-                                kunjungan berikutnya
-                            </li>
-                        </ol>
-                    </div>
-                )}
-                {auth.role === "pembimbing_pt" && (
-                    <div className="w-full md:w-4/5">
-                        <ol className="list-decimal pl-5 space-y-2">
-                            <li>
-                                {auth.role.replace(/_/g, " ")} Login dengan user
-                                yang telah dibuatkan oleh admin
-                            </li>
-                            <li>
-                                Jika berhasil, {auth.role.replace(/_/g, " ")}{" "}
-                                akan Masuk ke dashboard.
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa memantau
-                                jumlah kehadiran siswa setiap hari di halaman
-                                dashboard
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} mempunyai
-                                    data siswa yang di bimbing
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Admin ,Pembimbing Pt DuDi , dan Pembimbing
-                                    Sekolah berhak menyetujui / menolak Judul
-                                    laporan yang di buat oleh siswa
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Jika disetujui , siswa dapat memulai membuat
-                                    laporan , dan jika ditolak maka siswa harus
-                                    membuat revisi judul
-                                </b>
-                            </li>
-                            <li>
-                                <img
-                                    src="./img/sampleLaporan.png"
-                                    className="w-full h-auto"
-                                    alt=""
-                                    srcSet=""
-                                />
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} mengetahui
-                                    seluruh jurnal yang telah dikirim oleh siswa
-                                    yang di bimbingnya
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Untuk menandai telah membaca jurnal yang
-                                    dikirim siswa,{" "}
-                                    {auth.role.replace(/_/g, " ")} bisa meng
-                                    klik tombol yang ada pada kolom mark
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa memberi
-                                nilai pada siswa pada akhir masa pkl.
-                                <b> Nilai hanya bisa diisi 1x per semester</b>
-                            </li>
-                            <li>
-                                {auth.user.name} bisa mengubah email dan
-                                password di halaman edit akun
-                            </li>
-                            <li>
-                                Setelah semua telah dikerjakan , pastikan untuk
-                                logout
-                                <b>
-                                    {" "}
-                                    agar data pengguna bisa di hapus dari
-                                    session,
-                                </b>
-                                &nbsp; karena session memungkinkan user bisa
-                                langsung masuk ke dashboard tanpa login pada
-                                kunjungan berikutnya
-                            </li>
-                        </ol>
-                    </div>
-                )}
-
-                {auth.role === "admin" && (
-                    <div className="w-full md:w-4/5">
-                        <ol className="list-decimal pl-5 space-y-2">
-                            <li>
-                                Login dengan user role admin yang telah dibuat
-                                pertama kali
-                            </li>
-                            <li>
-                                Jika berhasil, {auth.role.replace(/_/g, " ")}{" "}
-                                akan masuk ke dashboard.
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa memantau
-                                jumlah tempat , siswa, pembimbing pt, pembimbing
-                                sekolah saat ini
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} bisa mengubah
-                                gambar slider yang ada pada halaman welcome
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} wajib mendata
-                                    user yang nantinya bisa verifikasi dan
-                                    registrasi sebagai siswa
-                                </b>
-                            </li>
-                            <li>
-                                Penambahan data bisa melalui excel atau manual
-                            </li>
-                            <li>
-                                <b>
-                                    Jika telah di verifikasi oleh siswa , data
-                                    tidak bisa dihapus
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Admin ,Pembimbing Pt DuDi , dan Pembimbing
-                                    Sekolah berhak menyetujui / menolak Judul
-                                    laporan yang di buat oleh siswa
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Jika disetujui , siswa dapat memulai membuat
-                                    laporan , dan jika ditolak maka siswa harus
-                                    membuat revisi judul
-                                </b>
-                            </li>
-                            <li>
-                                <img
-                                    src="./img/sampleLaporan.png"
-                                    className="w-full h-auto"
-                                    alt=""
-                                    srcSet=""
-                                />
-                            </li>
-                            <li>
-                                <b>
-                                    {auth.role.replace(/_/g, " ")} berhak
-                                    menyetujui / menolak pengajuan tempat dan
-                                    dilakukan oleh siswa
-                                </b>
-                            </li>
-                            <li>
-                                <b>
-                                    Jika disetujui, siswa akan secara otomatis
-                                    terdaftar sebagai peserta magang di tempat
-                                    yang telah diajukan sebelumnya. Apabila
-                                    tempat tersebut merupakan tempat baru, maka
-                                    data tempat tersebut akan otomatis
-                                    ditambahkan ke dalam daftar tempat DU/DI.
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} berhak memberi
-                                tau secara langsung atau lewat kontak mengenai
-                                usulan pengajuan tempat dari siswa
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} dapat membuat
-                                data jurusan dan apabila ingin digunakan bisa di
-                                set menjadi aktif
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} dapat membuat
-                                data tahun ajaran dan apabila ingin digunakan
-                                bisa di set menjadi aktif
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} dapat membuat
-                                data tempat du/di dan hanya{" "}
-                                <b>bisa di set 1 pembimbing pt</b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")}{" "}
-                                <b>
-                                    {" "}
-                                    bisa menambah user baru untuk pembimbing pt
-                                    dan pembimbing sekolah
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")}{" "}
-                                <b>
-                                    bisa menambah user baru untuk siswa yang
-                                    nantinya tak perlu lagi verifikasi untuk
-                                    login ke dashboard
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")}{" "}
-                                <b>
-                                    berhak menambah / mengubah tempat pkl
-                                    ,pembimbing sekolah,jurusan dan tahun ajaran
-                                    untuk siswa yang telah verifikasi dan
-                                    register
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")}{" "}
-                                <b>
-                                    tak bisa mengubah nama siswa kecuali dari
-                                    halaman data siswa
-                                </b>
-                            </li>
-                            <li>
-                                {auth.role.replace(/_/g, " ")} mengetahui
-                                seluruh jurnal yang telah diisi siswa
-                            </li>
-                            <li>
-                                Untuk menandai telah membaca jurnal yang dikirim
-                                siswa, {auth.role.replace(/_/g, " ")} bisa meng
-                                klik tombol yang ada pada kolom mark
-                            </li>
-                            <li>
-                                {auth.user.name} bisa mengubah email dan
-                                password di halaman edit akun
-                            </li>
-                            <li>
-                                Setelah semua telah dikerjakan , pastikan untuk
-                                logout
-                                <b>
-                                    {" "}
-                                    agar data pengguna bisa di hapus dari
-                                    session,
-                                </b>
-                                &nbsp;karena session memungkinkan user bisa
-                                langsung masuk ke dashboard tanpa login pada
-                                kunjungan berikutnya
-                            </li>
-                        </ol>
-                    </div>
-                )}
+            <Head title="Panduan" />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Bantuan" title="Panduan Aplikasi" quote={`Langkah penggunaan E-PKL untuk ${roleLabel(auth.role)}.`} />
+                <nav aria-label="Daftar isi" className="flex flex-wrap gap-2">
+                    {bagian.map((b, i) => (
+                        <a key={b.title} href={`#bagian-${i}`} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:border-blue-300 hover:text-blue-800">
+                            {b.title}
+                        </a>
+                    ))}
+                </nav>
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
+                    {bagian.map((b, i) => (
+                        <Card key={b.title} id={`bagian-${i}`} className="scroll-mt-24">
+                            <CardHeader icon={b.icon ?? <LogOut />} title={b.title} />
+                            <CardBody>
+                                <ol className="space-y-3">
+                                    {b.items.map((t, j) => (
+                                        <li key={j} className="flex gap-3 text-sm text-slate-700">
+                                            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">{j + 1}</span>
+                                            <span className="pt-0.5">{t}</span>
+                                        </li>
+                                    ))}
+                                </ol>
+                                {b.image && <img src={assetUrl(b.image)} alt="Contoh judul laporan" loading="lazy" className="mt-4 w-full rounded-xl border border-slate-200" onError={(e) => (e.currentTarget.style.display = "none")} />}
+                            </CardBody>
+                        </Card>
+                    ))}
+                </div>
             </div>
         </AuthenticatedLayout>
     );
-};
-
-export default Dashboard;
+}

@@ -17,7 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withSchedule(function(Schedule $schedule){
         $schedule->command("session:prune-custom")->everyTwoHours();
-        $schedule->command("app:see-jurnal")->weeklyOn("monday", "00:00");
+        $schedule->command("app:see-jurnal")->weeklyOn(1, "00:00");
     })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->web(append: [

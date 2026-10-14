@@ -17,11 +17,14 @@ Route::middleware('guest')->group(function () {
     //     ->name('register');
 
     // Route::post('register', [RegisteredUserController::class, 'store']);
-    Route::resource("register",RegisteredUserController::class);
+    // Controller hanya memiliki index, edit, dan store; aksi lain sebelumnya
+    // terdaftar tetapi menghasilkan error 500.
+    Route::resource("register",RegisteredUserController::class)->only(["index","edit","store"]);
     Route::get('aktivasi', [AktivasiController::class, 'create'])
         ->name('aktivasi');
 
-    Route::post('aktivasi', [AktivasiController::class, 'store']);
+    // Dibatasi agar nomor aktivasi (NISN) tidak bisa ditebak secara brute force.
+    Route::post('aktivasi', [AktivasiController::class, 'store'])->middleware('throttle:10,1');
 
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])

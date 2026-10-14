@@ -1,156 +1,78 @@
+import Callout from "@/Components/Callout";
 import Checkbox from "@/Components/Checkbox";
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
+import FormField from "@/Components/FormField";
 import PrimaryButton from "@/Components/PrimaryButton";
+import Spinner from "@/Components/Spinner";
 import TextInput from "@/Components/TextInput";
-import { Head, Link, useForm, usePage } from "@inertiajs/react";
+import GuestLayout from "@/Layouts/GuestLayout";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { Eye, EyeOff, LogIn } from "lucide-react";
+import { useState } from "react";
 
 export default function Login({ status, canResetPassword }) {
-    const { auth } = usePage().props;
-    const { data, setData, post, processing, errors, reset } = useForm({
-        email: "",
-        password: "",
-        remember: false,
-    });
+    const [lihat, setLihat] = useState(false);
+    const { data, setData, post, processing, errors, reset } = useForm({ email: "", password: "", remember: false });
 
     const submit = (e) => {
         e.preventDefault();
-
-        post(route("login"), {
-            onFinish: () => reset("password"),
-        });
+        post(route("login"), { onFinish: () => reset("password") });
     };
-    
+
     return (
-        <div
-            style={{ background: "url(./header2.avif)" }}
-            className="flex justify-center items-center min-h-screen w-full"
-        >
-            {" "}
-            <Head title="Log in" />
-            <div className="h-full rounded-md bg-clip-padding backdrop-filter backdrop-blur-md bg-opacity-10 border border-gray-100 w-11/12 sm:w-3/4 md:w-1/2 max-w-sm ">
-                <div className="border-b rounded-b-[150%] h-auto p-2 border-b-black bg-blue-600">
-                    <a className="flex w-full justify-center " href="/">
-                        <img
-                            src="../img/logo.png"
-                            className="w-20 h-20 border rounded-full border-black object-cover p-4 bg-white"
-                            alt=""
+        <GuestLayout title="Masuk ke E-PKL" description="Gunakan email dan password akun Anda.">
+            <Head title="Masuk" />
+            {status && (
+                <Callout tone="success" className="mb-5">
+                    {status}
+                </Callout>
+            )}
+            <form onSubmit={submit} noValidate className="space-y-4">
+                <FormField label="Email" htmlFor="email" error={errors.email}>
+                    <TextInput id="email" type="email" name="email" autoComplete="username" isFocused className="w-full" value={data.email} onChange={(e) => setData("email", e.target.value)} invalid={!!errors.email} />
+                </FormField>
+                <FormField label="Password" htmlFor="password" error={errors.password}>
+                    <div className="relative">
+                        <TextInput
+                            id="password"
+                            type={lihat ? "text" : "password"}
+                            name="password"
+                            autoComplete="current-password"
+                            className="w-full pr-10"
+                            value={data.password}
+                            onChange={(e) => setData("password", e.target.value)}
+                            invalid={!!errors.password}
                         />
-                    </a>
-                </div>
-
-                <div className="w-full sm:max-w-md mt-6 px-6 py-4 shadow-md overflow-hidden sm:rounded-lg ">
-                    {auth?.flash?.error ? (
-                        <div
-                            className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 "
-                            role="alert"
+                        <button
+                            type="button"
+                            onClick={() => setLihat(!lihat)}
+                            aria-label={lihat ? "Sembunyikan password" : "Tampilkan password"}
+                            className="absolute inset-y-0 right-0 inline-flex w-10 items-center justify-center text-slate-400 hover:text-slate-700"
                         >
-                            <span className="font-medium lowercase">
-                                Gagal!
-                            </span>{" "}
-                            {auth?.flash?.error}
-                        </div>
-                    ) : (
-                        ""
+                            {lihat ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                    </div>
+                </FormField>
+                <div className="flex items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <Checkbox name="remember" checked={data.remember} onChange={(e) => setData("remember", e.target.checked)} />
+                        Ingat saya
+                    </label>
+                    {canResetPassword && (
+                        <Link href={route("password.request")} className="text-sm font-medium text-blue-700 hover:underline">
+                            Lupa password?
+                        </Link>
                     )}
-                    <form onSubmit={submit}>
-                        <div>
-                            <InputLabel
-                                htmlFor="email"
-                                className="text-white"
-                                value="Email"
-                            />
-
-                            <TextInput
-                                id="email"
-                                type="text"
-                                name="email"
-                                value={data.email}
-                                className="mt-1 block w-full"
-                                onChange={(e) =>
-                                    setData("email", e.target.value)
-                                }
-                            />
-
-                            <InputError
-                                message={errors.email}
-                                className="mt-2 bg-red-50 text-center p-1 rounded-md inline-block"
-                            />
-                        </div>
-
-                        <div className="mt-4">
-                            <InputLabel
-                                className="text-white"
-                                htmlFor="password"
-                                value="Password"
-                            />
-
-                            <TextInput
-                                id="password"
-                                type="password"
-                                name="password"
-                                value={data.password}
-                                className="mt-1 block w-full"
-                                autoComplete="current-password"
-                                onChange={(e) =>
-                                    setData("password", e.target.value)
-                                }
-                            />
-
-                            <InputError
-                                message={errors.password}
-                                className="mt-2 bg-red-50 text-center p-1 rounded-md inline-block"
-                            />
-                        </div>
-
-                        <div className="mt-4 block">
-                            <label className="flex items-center">
-                                <Checkbox
-                                    name="remember"
-                                    checked={data.remember}
-                                    onChange={(e) =>
-                                        setData("remember", e.target.checked)
-                                    }
-                                />
-                                <span className="text-white ms-2 text-sm">
-                                    Remember me
-                                </span>
-                            </label>
-                        </div>
-                        <div className="mt-4 block">
-                            <label className="flex items-center">
-                                <p className="rounded-md text-sm text-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                                    Don't have an account?{" "}
-                                    <Link
-                                        className="text-white hover:text-gray-900 underline"
-                                        href={route("aktivasi")}
-                                    >
-                                        register
-                                    </Link>
-                                </p>
-                            </label>
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-end">
-                            {canResetPassword && (
-                                <Link
-                                    href={route("password.request")}
-                                    className="rounded-md text-sm text-gray-50 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                >
-                                    Forgot your password?
-                                </Link>
-                            )}
-
-                            <PrimaryButton
-                                className="ms-4 bg-gradient-to-br from-emerald-700 to-sky-700  hover:bg-emerald-800 border border-white focus:border-emerald-400"
-                                disabled={processing}
-                            >
-                                Log in
-                            </PrimaryButton>
-                        </div>
-                    </form>
                 </div>
-            </div>
-        </div>
+                <PrimaryButton className="w-full" disabled={processing}>
+                    {processing ? <Spinner /> : <LogIn />} Masuk
+                </PrimaryButton>
+            </form>
+            <p className="mt-6 text-center text-sm text-slate-600">
+                Siswa belum punya akun?{" "}
+                <Link href={route("aktivasi")} className="font-semibold text-blue-700 hover:underline">
+                    Aktivasi akun
+                </Link>
+            </p>
+        </GuestLayout>
     );
 }

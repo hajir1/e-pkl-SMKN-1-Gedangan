@@ -1,14 +1,23 @@
-import React from "react";
+import { forwardRef } from "react";
 
-const Textarea = ({className,placeholder, ...props}) => {
+const Textarea = forwardRef(function Textarea(
+    { className = "", placeholder, rows = 3, invalid, ...props },
+    ref
+) {
     return (
         <textarea
             {...props}
-            rows="2"
-            className={`block p-2.5 w-full text-sm text-gray-900  rounded-lg shadow-sm border border-gray-300 focus:ring-primary-500 focus:border-primary-500 placeholder:text-gray-700 resize-none ${className}`}
-            placeholder={`${placeholder}`}
+            ref={ref}
+            rows={rows}
+            aria-invalid={invalid ? true : undefined}
+            className={`block w-full resize-y rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 ${
+                invalid
+                    ? "border-rose-400 focus:border-rose-500 focus:ring-rose-500/30"
+                    : "border-slate-300 focus:border-blue-600 focus:ring-blue-500/30"
+            } ${className}`}
+            placeholder={placeholder ?? ""}
         ></textarea>
     );
-};
+});
 
 export default Textarea;

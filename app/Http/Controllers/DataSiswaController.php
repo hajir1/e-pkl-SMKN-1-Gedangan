@@ -24,10 +24,14 @@ class DataSiswaController extends Controller
             $query->where('isActive',"=",filter_var($request->input('aktivasi'), FILTER_VALIDATE_BOOLEAN));
         })
         ->when($request->filled("search") , function($query)use($request){
-            $query->where("nama","like","%{$request->search}%")
-            ->orWhere("nisn","like","%{$request->search}%");
+            // Dibungkus agar orWhere tidak mengabaikan filter kode/aktivasi.
+            $query->where(fn($q) => $q->where("nama","like","%{$request->search}%")
+            ->orWhere("nisn","like","%{$request->search}%"));
         })
-        ->orderBy($request->input("sort_by","created_at"),$request->input("sort_order","desc"))
+        ->orderBy(
+            in_array($request->input("sort_by"), ["nama","nisn","isActive","created_at","updated_at"], true) ? $request->input("sort_by") : "created_at",
+            strtolower((string) $request->input("sort_order","desc")) === "asc" ? "asc" : "desc"
+        )
         ->paginate(10)->withQueryString();
 
         
@@ -113,10 +117,12 @@ class DataSiswaController extends Controller
     public function destroy(string $id)
     {
         $dataId = Datasiswa::findOrFail($id);
-
-        if($dataId){
-            $dataId->delete();
+        // Data registrasi yang sudah dipakai akun siswa tidak boleh dihapus,
+        // karena akun tersebut akan kehilangan NISN-nya.
+        if(User::where("nisn_id","=",$dataId->id)->exists()){
+            return redirect()->route("data_siswa.index")->with("error","Data Registrasi Masih Dipakai Akun Siswa");
         }
+        $dataId->delete();
         
         return redirect()->route("data_siswa.index")->with("success","Sukses Menghapus Data Registrasi User");
     }

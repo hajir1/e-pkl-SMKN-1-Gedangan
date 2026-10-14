@@ -1,147 +1,61 @@
-import Checkbox from "@/Components/Checkbox";
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
+import FormField from "@/Components/FormField";
 import Modal from "@/Components/Modal";
 import PrimaryButton from "@/Components/PrimaryButton";
-import SecondaryButton from "@/Components/SecondaryButton";
+import Spinner from "@/Components/Spinner";
 import TextInput from "@/Components/TextInput";
-import TitleModal from "@/Components/TitleModal";
-import { Head, Link, useForm, usePage } from "@inertiajs/react";
-import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import TitleModal, { ModalBody } from "@/Components/TitleModal";
+import GuestLayout from "@/Layouts/GuestLayout";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { ArrowRight, HelpCircle } from "lucide-react";
+import { useState } from "react";
 
 export default function Aktivasi() {
-    const { auth } = usePage().props;
     const [panduan, setPanduan] = useState(false);
-    const { data, setData, post, processing, errors, reset } = useForm({
-        nisn: "",
-    });
+    const { data, setData, post, processing, errors, setError } = useForm({ nisn: "" });
 
     const submit = (e) => {
         e.preventDefault();
-        post(route("aktivasi"), {
-            onSuccess: () => {
-                reset();
-            },
-        });
+        const nisn = data.nisn.trim();
+        if (nisn.length < 9) return setError("nisn", "Nomor aktivasi minimal 9 karakter");
+        post(route("aktivasi"), { transform: () => ({ nisn }) });
     };
+
     return (
-        <div
-            style={{ background: "url(./header2.avif)" }}
-            className="flex justify-center items-center min-h-screen w-full"
-        >
-            {" "}
-            <Head title="Log in" />
-            <div className="h-full rounded-md bg-clip-padding backdrop-filter backdrop-blur-md bg-opacity-10 border border-gray-100 w-11/12 sm:w-3/4 md:w-1/2 max-w-sm ">
-                <div className="border-b rounded-b-[150%] h-auto p-2 border-b-black bg-blue-600">
-                    <a className="flex w-full justify-center " href="/">
-                        <img
-                            src="../img/logo.png"
-                            className="w-20 h-20 border rounded-full border-black object-cover p-4 bg-white"
-                            alt=""
-                        />
-                    </a>
-                </div>
+        <GuestLayout title="Aktivasi Akun Siswa" description="Masukkan nomor aktivasi (nomor induk + kode jurusan) untuk membuat akun.">
+            <Head title="Aktivasi Akun" />
+            <form onSubmit={submit} noValidate className="space-y-4">
+                <FormField label="Nomor aktivasi" htmlFor="nisn" required error={errors.nisn} help="Contoh: 12010001.001">
+                    <TextInput id="nisn" name="nisn" autoComplete="off" isFocused className="w-full font-mono" value={data.nisn} onChange={(e) => setData("nisn", e.target.value)} invalid={!!errors.nisn} />
+                </FormField>
+                <PrimaryButton className="w-full" disabled={processing}>
+                    {processing ? <Spinner /> : <ArrowRight />} Lanjutkan
+                </PrimaryButton>
+                <button type="button" onClick={() => setPanduan(true)} className="inline-flex w-full items-center justify-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-900">
+                    <HelpCircle className="h-4 w-4" /> Cara mengetahui nomor aktivasi
+                </button>
+            </form>
+            <p className="mt-6 text-center text-sm text-slate-600">
+                Sudah punya akun?{" "}
+                <Link href={route("login")} className="font-semibold text-blue-700 hover:underline">
+                    Masuk
+                </Link>
+            </p>
 
-                <div className="w-full sm:max-w-md mt-6 px-6 py-4 shadow-md overflow-hidden sm:rounded-lg ">
-                    {auth?.flash?.error ? (
-                        <div
-                            className="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 "
-                            role="alert"
-                        >
-                            <span className="font-medium lowercase">
-                                Gagal!
-                            </span>{" "}
-                            {auth?.flash?.error}
-                        </div>
-                    ) : (
-                        ""
-                    )}
-                    <form onSubmit={submit}>
-                        <div className="">
-                            <InputLabel
-                                className="text-white"
-                                htmlFor="nisn"
-                                value="Nomor Aktivasi Akun"
-                            />
-
-                            <TextInput
-                                id="nisn"
-                                type="text"
-                                name="nisn"
-                                value={data.nisn}
-                                className="mt-1 block w-full"
-                                onChange={(e) =>
-                                    setData("nisn", e.target.value)
-                                }
-                            />
-
-                            <InputError
-                                message={errors.nisn}
-                                className="mt-2 bg-red-50 text-center p-1 rounded-md inline-block"
-                            />
-                        </div>
-                        <div className="mt-4 block">
-                            <label className="flex items-center">
-                                <p className="rounded-md text-sm text-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
-                                    have an account?{" "}
-                                    <Link
-                                        className="text-white hover:text-gray-900 underline"
-                                        href={route("login")}
-                                    >
-                                        Login
-                                    </Link>
-                                </p>
-                            </label>
-                        </div>
-                        <div className="mt-4 flex items-center justify-between">
-                            <label className="flex items-center">
-                                <div
-                                    onClick={() => setPanduan(!panduan)}
-                                    className="inline-flex items-center rounded-md border border-transparent  px-4 py-2 text-xs font-semibold uppercase tracking-widest transition duration-150 ease-in-out bg-black hover:bg-gray-700 focus:bg-gray-700  text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-gray-900"
-                                >
-                                    Panduan
-                                </div>
-                            </label>
-                            <PrimaryButton
-                                className="ms-4 bg-gradient-to-br from-emerald-700 to-sky-700  hover:bg-emerald-800 border border-white focus:border-emerald-400"
-                                disabled={processing}
-                            >
-                                Aktivasi Akun
-                            </PrimaryButton>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <Modal show={panduan} onClose={() => setPanduan(!panduan)}>
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Panduan Aktivasi Akun"}
-                        onClick={() => {
-                            setPanduan(!panduan);
-                        }}
-                    ></TitleModal>
-                    <div className="p-4 text-slate-900">
-                        <p className="lowercase">
-                            Untuk menjaga keamanan dan validitas data, aktivasi
-                            akun diperlukan agar pihak pengembang atau admin
-                            sekolah dapat memastikan bahwa pengguna yang
-                            mendaftar benar-benar merupakan siswa aktif SMKN 1
-                            Gedangan.
-                        </p>
-                        <p className="font-bold">
-                            Contoh Aktivasi (no induk + no jurusan)
-                        </p>
-                        <p>Jika kamu memiliki no induk = 1201</p>
-                        <p>dan memiliki no induk = 0001.001</p>
-
-                        <p className="font-bold">
-                            Maka Penulisan Aktivasi Adalah 12010001.001
+            <Modal show={panduan} onClose={() => setPanduan(false)} maxWidth="md">
+                <TitleModal title="Panduan Aktivasi Akun" onClick={() => setPanduan(false)} />
+                <ModalBody className="space-y-3 text-sm text-slate-700">
+                    <p>Aktivasi memastikan bahwa yang mendaftar benar-benar siswa aktif SMKN 1 Gedangan.</p>
+                    <p>Nomor aktivasi adalah gabungan <b>nomor induk</b> dan <b>kode jurusan</b> tanpa spasi.</p>
+                    <div className="rounded-xl bg-slate-50 p-4">
+                        <p>Nomor induk: <span className="font-mono">1201</span></p>
+                        <p>Kode jurusan: <span className="font-mono">0001.001</span></p>
+                        <p className="mt-2 font-semibold text-slate-900">
+                            Nomor aktivasi: <span className="font-mono">12010001.001</span>
                         </p>
                     </div>
-                </div>
+                    <p>Jika nomor tidak ditemukan, hubungi admin sekolah.</p>
+                </ModalBody>
             </Modal>
-        </div>
+        </GuestLayout>
     );
 }

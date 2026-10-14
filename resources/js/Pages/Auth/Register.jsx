@@ -1,21 +1,24 @@
+import Callout from "@/Components/Callout";
 import Checkbox from "@/Components/Checkbox";
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
+import FormField from "@/Components/FormField";
 import PrimaryButton from "@/Components/PrimaryButton";
+import Select from "@/Components/Select";
+import Spinner from "@/Components/Spinner";
+import TempatLahirSelect from "@/Components/TempatLahirSelect";
 import TextInput from "@/Components/TextInput";
-import { Alert } from "@/Helpers/Alert";
 import GuestLayout from "@/Layouts/GuestLayout";
-import { useGetProvince, useGetRegencies } from "@/services/api_call";
 import { Head, Link, useForm, usePage } from "@inertiajs/react";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import ReCAPTCHA from "react-google-recaptcha";
+import { UserPlus } from "lucide-react";
+
+const KONTAK_REGEX = /^0[0-9]{9,12}$/;
 
 export default function Register() {
-    const { data: provinceData } = useGetProvince();
-    const [provinceId, setProvinceId] = useState("35");
-    const { data: regenciesData } = useGetRegencies(provinceId);
-    const { jurusans, tahunAjarans, auth, siswa } = usePage().props;
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { jurusans = [], tahunAjarans = [], siswa } = usePage().props;
+    const captcha = useRef();
+    const [setuju, setSetuju] = useState(false);
+    const { data, setData, post, processing, errors, setError, clearErrors, reset } = useForm({
         nisn: siswa?.nisn ?? "",
         email: "",
         kontak: "",
@@ -27,376 +30,105 @@ export default function Register() {
         password: "",
         password_confirmation: "",
     });
-    const [checked, setChecked] = useState(false);
+    const set = (k) => (e) => setData(k, e.target.value);
+
     const submit = (e) => {
         e.preventDefault();
+        clearErrors();
+        const err = {};
+        if (!data.email) err.email = "Email wajib diisi";
+        if (!KONTAK_REGEX.test(data.kontak)) err.kontak = "Nomor HP 10-13 digit dan diawali angka 0";
+        if (!data.jurusan_id) err.jurusan_id = "Pilih jurusan";
+        if (!data.tahunAjaran_id) err.tahunAjaran_id = "Pilih tahun ajaran";
+        if (!data.tempat_lahir) err.tempat_lahir = "Pilih tempat lahir";
+        if (!data.tanggal_lahir) err.tanggal_lahir = "Isi tanggal lahir";
+        if (data.password.length < 8) err.password = "Password minimal 8 karakter";
+        else if (data.password !== data.password_confirmation) err.password_confirmation = "Konfirmasi password tidak sama";
+        if (!data["g-recaptcha-response"]) err["g-recaptcha-response"] = "Selesaikan verifikasi CAPTCHA";
+        if (Object.keys(err).length) return setError(err);
 
         post(route("register.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    Alert(`${sccs.props.auth.flash?.success}`, "success", 5000);
-                    reset();
-                } else {
-                    Alert(`${sccs.props.auth.flash?.error}`, "error", 4000);
-                }
+            onError: () => {
+                // Token CAPTCHA hanya berlaku sekali.
+                captcha.current?.reset();
+                setData("g-recaptcha-response", "");
             },
+            onSuccess: () => reset(),
         });
     };
 
     return (
-        <div
-            style={{ background: "url(/header2.avif)" }}
-            className="flex justify-center items-center min-h-screen w-full"
-        >
-            <Head title="Register" />
-            <div className="h-full mt-4 rounded-md bg-clip-padding backdrop-filter backdrop-blur-md bg-opacity-10 border border-gray-100 w-11/12 ">
-                <div className="border-b rounded-b-[150%] h-auto p-2 border-b-black bg-blue-600">
-                    <a className="flex w-full justify-center " href="/">
-                        <img
-                            src="/img/logo.png"
-                            className="w-20 h-20 border rounded-full border-black object-cover p-4 bg-white"
-                            alt=""
-                        />
-                    </a>
+        <GuestLayout wide title="Lengkapi Data Akun" description="Satu langkah lagi untuk membuat akun E-PKL Anda.">
+            <Head title="Registrasi" />
+            <form onSubmit={submit} noValidate className="space-y-5">
+                <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm">
+                    <p className="text-slate-500">Mendaftar sebagai</p>
+                    <p className="font-semibold text-slate-900">
+                        {siswa?.nama} <span className="font-mono font-normal text-slate-500">· {siswa?.nisn}</span>
+                    </p>
                 </div>
-                <div className="w-full mt-6 px-6 py-4 shadow-md overflow-hidden sm:rounded-lg">
-                    {auth.flash?.success ? (
-                        <div
-                            className="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 "
-                            role="alert"
-                        >
-                            <span className="font-medium lowercase">
-                                Registrasi Akun Untuk {siswa.nama} Telah
-                                Berhasil!
-                            </span>{" "}
-                        </div>
-                    ) : (
-                        ""
-                    )}
-                    <form className="grid grid-cols-2 gap-2" onSubmit={submit}>
-                        <div className="col-span-2 md:col-span-1  space-y-4">
-                            <div className="">
-                                <InputLabel
-                                    className="text-white"
-                                    value={"Nama"}
-                                />
-                                <select
-                                    onChange={(e) =>
-                                        setData("nisn", e.target.value)
-                                    }
-                                    value={data.nisn}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option
-                                        disabled
-                                        key={siswa.id}
-                                        value={siswa.nisn}
-                                    >
-                                        {siswa.nama} | {siswa.nisn}
-                                    </option>
-                                </select>
 
-                                <InputError
-                                    message={errors.nisn}
-                                    className="mt-2"
-                                />
-                            </div>
+                {/* Error CAPTCHA dari server dikirim dengan key "error" dan sebelumnya tidak ditampilkan. */}
+                {errors.error && <Callout tone="danger">{errors.error}</Callout>}
+                {errors.nisn && <Callout tone="danger">{errors.nisn}</Callout>}
 
-                            <div className="">
-                                <InputLabel
-                                    className="text-white"
-                                    htmlFor="email"
-                                    value="Email"
-                                />
-
-                                <TextInput
-                                    id="email"
-                                    type="email"
-                                    name="email"
-                                    value={data.email}
-                                    className="mt-1 block w-full"
-                                    autoComplete="username"
-                                    onChange={(e) =>
-                                        setData("email", e.target.value)
-                                    }
-                                    required
-                                />
-
-                                <InputError
-                                    message={errors.email}
-                                    className="mt-2"
-                                />
-                            </div>
-
-                            <div>
-                                <InputLabel
-                                    className="text-white"
-                                    htmlFor="kontak"
-                                    value="kontak"
-                                />
-
-                                <TextInput
-                                    id="kontak"
-                                    kontak="kontak"
-                                    value={data.kontak}
-                                    className="mt-1 block w-full"
-                                    autoComplete="kontak"
-                                    onChange={(e) =>
-                                        setData("kontak", e.target.value)
-                                    }
-                                    required
-                                />
-
-                                <InputError
-                                    message={errors.kontak}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div>
-                                <InputLabel
-                                    className="text-white"
-                                    value={"Tahun Ajaran"}
-                                />
-                                <select
-                                    onChange={(e) =>
-                                        setData(
-                                            "tahunAjaran_id",
-                                            e.target.value
-                                        )
-                                    }
-                                    value={data.tahunAjaran_id}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option disabled value="">
-                                        Default
-                                    </option>
-
-                                    {tahunAjarans?.length > 0 &&
-                                        tahunAjarans?.map((ta) => (
-                                            <option key={ta.id} value={ta.id}>
-                                                {ta.tahun}
-                                            </option>
-                                        ))}
-                                </select>
-
-                                <InputError
-                                    message={errors.tahunAjaran_id}
-                                    className="mt-2 bg-red-50 text-center p-1 rounded-md inline-block"
-                                />
-                            </div>
-
-                            <div className="">
-                                <InputLabel
-                                    className="text-white"
-                                    value={"Tempat Lahir"}
-                                />
-                                <select
-                                    onChange={(e) =>
-                                        setProvinceId(e.target.value)
-                                    }
-                                    value={provinceId}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1 "
-                                >
-                                    {provinceData &&
-                                        provinceData.map((province) => (
-                                            <option
-                                                key={province.id}
-                                                value={province.id}
-                                            >
-                                                {province.name}
-                                            </option>
-                                        ))}
-                                </select>
-                            </div>
-                            {provinceId !== "" && (
-                                <div className="">
-                                    <select
-                                        onChange={(e) =>
-                                            setData(
-                                                "tempat_lahir",
-                                                e.target.value
-                                            )
-                                        }
-                                        value={data.tempat_lahir}
-                                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 "
-                                    >
-                                        <option value="">Default</option>
-                                        {regenciesData &&
-                                            regenciesData.map((reg) => (
-                                                <option
-                                                    key={reg.id}
-                                                    value={reg.name}
-                                                >
-                                                    {reg.name}
-                                                </option>
-                                            ))}
-                                    </select>
-
-                                    <InputError
-                                        message={errors.tempat_lahir}
-                                        className="mt-2"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                        <div className="col-span-2 md:col-span-1 space-y-4">
-                            <div>
-                                <InputLabel
-                                    className="text-white"
-                                    htmlFor="tanggal_lahir"
-                                    value="Tanggal Lahir"
-                                />
-
-                                <TextInput
-                                    id="tanggal_lahir"
-                                    type="date"
-                                    value={data.tanggal_lahir}
-                                    className="mt-1 block w-full"
-                                    autoComplete="tanggal_lahir"
-                                    onChange={(e) =>
-                                        setData("tanggal_lahir", e.target.value)
-                                    }
-                                    required
-                                />
-
-                                <InputError
-                                    message={errors.tanggal_lahir}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div>
-                                <InputLabel
-                                    className="text-white"
-                                    value={"Jurusan"}
-                                />
-                                <select
-                                    onChange={(e) =>
-                                        setData("jurusan_id", e.target.value)
-                                    }
-                                    value={data.jurusan_id}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option disabled value="">
-                                        Default
-                                    </option>
-
-                                    {jurusans?.length > 0 &&
-                                        jurusans?.map((jurusan) => (
-                                            <option
-                                                key={jurusan.id}
-                                                value={jurusan.id}
-                                            >
-                                                {jurusan.nama}
-                                            </option>
-                                        ))}
-                                </select>
-
-                                <InputError
-                                    message={errors.jurusan_id}
-                                    className="mt-2 bg-red-50 text-center p-1 rounded-md inline-block"
-                                />
-                            </div>
-                            <div className="">
-                                <InputLabel
-                                    className="text-white"
-                                    htmlFor="password"
-                                    value="Password"
-                                />
-
-                                <TextInput
-                                    id="password"
-                                    type="password"
-                                    name="password"
-                                    value={data.password}
-                                    className="mt-1 block w-full"
-                                    autoComplete="new-password"
-                                    onChange={(e) =>
-                                        setData("password", e.target.value)
-                                    }
-                                    required
-                                />
-
-                                <InputError
-                                    message={errors.password}
-                                    className="mt-2"
-                                />
-                            </div>
-
-                            <div className="">
-                                <InputLabel
-                                    className="text-white"
-                                    htmlFor="password_confirmation"
-                                    value="Confirm Password"
-                                />
-
-                                <TextInput
-                                    id="password_confirmation"
-                                    type="password"
-                                    name="password_confirmation"
-                                    value={data.password_confirmation}
-                                    className="mt-1 block w-full"
-                                    autoComplete="new-password"
-                                    onChange={(e) =>
-                                        setData(
-                                            "password_confirmation",
-                                            e.target.value
-                                        )
-                                    }
-                                    required
-                                />
-
-                                <InputError
-                                    message={errors.password_confirmation}
-                                    className="mt-2"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="col-span-2">
-                            <ReCAPTCHA
-                                className="g-recaptcha mt-5 md:mt-2"
-                                onChange={(token) =>
-                                    setData("g-recaptcha-response", token)
-                                }
-                                sitekey={import.meta.env.VITE_SITE_KEY}
-                            ></ReCAPTCHA>
-                            <InputError
-                                message={errors["g-recaptcha-response"]}
-                                className="mt-2"
-                            />
-                            <div className="bg-white p-2 inline-block rounded-md">
-                                <label className="flex items-center">
-                                    <Checkbox
-                                        checked={checked}
-                                        onChange={(e) => setChecked(!checked)}
-                                    />
-                                    <span className="text-slate-900 ms-2 text-sm">
-                                        Saya Benar Benar Yakin Bahwa Saya Adalah
-                                        Siswa / Siswi Smkn 1 Gedangan Dan Data
-                                        Yang Saya Kirim Benar Benar Data
-                                        Sesungguhnya
-                                    </span>
-                                </label>
-                            </div>
-                            <div className="w-full mt-3 flex justify-end items-center">
-                                <Link
-                                    href={route("login")}
-                                    className="rounded-md text-sm text-gray-50 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                >
-                                    Already registered?
-                                </Link>
-
-                                <PrimaryButton
-                                    className="ms-4 bg-gradient-to-br from-emerald-700 to-sky-700  hover:bg-emerald-800 border border-white focus:border-emerald-400"
-                                    disabled={processing || !checked}
-                                >
-                                    Register
-                                </PrimaryButton>
-                            </div>
-                        </div>
-                    </form>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <FormField label="Email" htmlFor="email" required error={errors.email}>
+                        <TextInput id="email" type="email" autoComplete="email" className="w-full" value={data.email} onChange={set("email")} invalid={!!errors.email} />
+                    </FormField>
+                    <FormField label="No. HP / WhatsApp" htmlFor="kontak" required error={errors.kontak} help="Contoh: 081234567890">
+                        <TextInput id="kontak" inputMode="tel" className="w-full" value={data.kontak} onChange={set("kontak")} invalid={!!errors.kontak} />
+                    </FormField>
+                    <FormField label="Jurusan" htmlFor="jurusan_id" required error={errors.jurusan_id}>
+                        <Select id="jurusan_id" value={data.jurusan_id} onChange={set("jurusan_id")} invalid={!!errors.jurusan_id}>
+                            <option value="">Pilih jurusan</option>
+                            {jurusans.map((j) => (
+                                <option key={j.id} value={j.id}>{j.nama}</option>
+                            ))}
+                        </Select>
+                    </FormField>
+                    <FormField label="Tahun ajaran" htmlFor="tahunAjaran_id" required error={errors.tahunAjaran_id}>
+                        <Select id="tahunAjaran_id" value={data.tahunAjaran_id} onChange={set("tahunAjaran_id")} invalid={!!errors.tahunAjaran_id}>
+                            <option value="">Pilih tahun ajaran</option>
+                            {tahunAjarans.map((t) => (
+                                <option key={t.id} value={t.id}>{t.tahun}</option>
+                            ))}
+                        </Select>
+                    </FormField>
+                    <div className="sm:col-span-2">
+                        <TempatLahirSelect value={data.tempat_lahir} onChange={(v) => setData("tempat_lahir", v)} error={errors.tempat_lahir} />
+                    </div>
+                    <FormField label="Tanggal lahir" htmlFor="tanggal_lahir" required error={errors.tanggal_lahir}>
+                        <TextInput id="tanggal_lahir" type="date" max={new Date().toISOString().slice(0, 10)} className="w-full" value={data.tanggal_lahir} onChange={set("tanggal_lahir")} invalid={!!errors.tanggal_lahir} />
+                    </FormField>
+                    <div className="hidden sm:block" />
+                    <FormField label="Password" htmlFor="password" required error={errors.password} help="Minimal 8 karakter.">
+                        <TextInput id="password" type="password" autoComplete="new-password" className="w-full" value={data.password} onChange={set("password")} invalid={!!errors.password} />
+                    </FormField>
+                    <FormField label="Konfirmasi password" htmlFor="password_confirmation" required error={errors.password_confirmation}>
+                        <TextInput id="password_confirmation" type="password" autoComplete="new-password" className="w-full" value={data.password_confirmation} onChange={set("password_confirmation")} invalid={!!errors.password_confirmation} />
+                    </FormField>
                 </div>
-            </div>
-        </div>
+
+                <FormField error={errors["g-recaptcha-response"]}>
+                    <ReCAPTCHA ref={captcha} onChange={(token) => setData("g-recaptcha-response", token ?? "")} sitekey={import.meta.env.VITE_SITE_KEY ?? ""} />
+                </FormField>
+
+                <label className="flex items-start gap-3 text-sm text-slate-700">
+                    <Checkbox className="mt-0.5" checked={setuju} onChange={(e) => setSetuju(e.target.checked)} />
+                    Saya menyatakan bahwa saya siswa/siswi SMKN 1 Gedangan dan data yang saya isi adalah benar.
+                </label>
+
+                <PrimaryButton className="w-full" disabled={processing || !setuju}>
+                    {processing ? <Spinner /> : <UserPlus />} Buat Akun
+                </PrimaryButton>
+                <p className="text-center text-sm text-slate-600">
+                    Sudah punya akun?{" "}
+                    <Link href={route("login")} className="font-semibold text-blue-700 hover:underline">
+                        Masuk
+                    </Link>
+                </p>
+            </form>
+        </GuestLayout>
     );
 }

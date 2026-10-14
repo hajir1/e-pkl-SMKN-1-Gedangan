@@ -1,49 +1,31 @@
-import PrimaryButton from '@/Components/PrimaryButton';
-import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import Callout from "@/Components/Callout";
+import PrimaryButton from "@/Components/PrimaryButton";
+import Spinner from "@/Components/Spinner";
+import GuestLayout from "@/Layouts/GuestLayout";
+import { Head, Link, useForm } from "@inertiajs/react";
+import { MailCheck } from "lucide-react";
 
 export default function VerifyEmail({ status }) {
     const { post, processing } = useForm({});
-
     const submit = (e) => {
         e.preventDefault();
-
-        post(route('verification.send'));
+        post(route("verification.send"));
     };
-
     return (
-        <GuestLayout>
-            <Head title="Email Verification" />
-
-            <div className="mb-4 text-sm text-gray-600">
-                Thanks for signing up! Before getting started, could you verify
-                your email address by clicking on the link we just emailed to
-                you? If you didn't receive the email, we will gladly send you
-                another.
-            </div>
-
-            {status === 'verification-link-sent' && (
-                <div className="mb-4 text-sm font-medium text-green-600">
-                    A new verification link has been sent to the email address
-                    you provided during registration.
-                </div>
+        <GuestLayout title="Verifikasi Email" description="Klik link yang kami kirim ke email Anda untuk mengaktifkan akun. Belum menerima email? Kirim ulang di bawah.">
+            <Head title="Verifikasi Email" />
+            {status === "verification-link-sent" && (
+                <Callout tone="success" className="mb-5">
+                    Link verifikasi baru telah dikirim ke email yang Anda daftarkan.
+                </Callout>
             )}
-
-            <form onSubmit={submit}>
-                <div className="mt-4 flex items-center justify-between">
-                    <PrimaryButton disabled={processing}>
-                        Resend Verification Email
-                    </PrimaryButton>
-
-                    <Link
-                        href={route('logout')}
-                        method="post"
-                        as="button"
-                        className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >
-                        Log Out
-                    </Link>
-                </div>
+            <form onSubmit={submit} className="space-y-3">
+                <PrimaryButton className="w-full" disabled={processing}>
+                    {processing ? <Spinner /> : <MailCheck />} Kirim Ulang Email Verifikasi
+                </PrimaryButton>
+                <Link href={route("logout")} method="post" as="button" className="w-full text-center text-sm font-medium text-slate-600 hover:text-slate-900">
+                    Keluar
+                </Link>
             </form>
         </GuestLayout>
     );

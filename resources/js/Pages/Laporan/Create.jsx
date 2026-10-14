@@ -1,362 +1,182 @@
-import Checkbox from "@/Components/Checkbox";
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
+import Callout from "@/Components/Callout";
+import Card, { CardBody, CardHeader } from "@/Components/Card";
+import FormField from "@/Components/FormField";
 import PrimaryButton from "@/Components/PrimaryButton";
+import Spinner from "@/Components/Spinner";
 import TextInput from "@/Components/TextInput";
-import SecondaryButton from "@/Components/SecondaryButton";
+import TitlePage from "@/Components/TitlePage";
+import { formatTanggal } from "@/Helpers/format";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { useTypeAjuanTempat } from "@/state/Zustand";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import {
-    ArrowLeft,
-    ClipboardList,
-    Download,
-    Plus,
-    QuoteIcon,
-} from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { toast, ToastContainer } from "react-toastify";
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
+import { Check, Download, FileText, History, Send } from "lucide-react";
+import { StatusLaporan } from "./Index";
 
-const Form = () => {
-    const { auth, laporan, step, siswa } = usePage().props;
-    const { data, setData, errors, post, processing, reset, put } = useForm({
-        judul: laporan?.judul ?? "",
-        user_id: auth.user.id,
-    });
-    const handleSubmit = (e) => {
+const LANGKAH = [
+    { key: "judul", label: "Ajukan judul" },
+    { key: "konfirmasi", label: "Konfirmasi pembimbing" },
+    { key: "export", label: "Unduh laporan" },
+];
+
+/** step dari backend: null = belum, 1 = ditolak/revisi, 2 = menunggu, 3 = diterima. */
+const posisi = (step) => (step === 3 ? 2 : step === 2 ? 1 : 0);
+
+function Stepper({ step }) {
+    const aktif = posisi(step);
+    return (
+        <ol className="flex items-center gap-2 sm:gap-4" aria-label="Tahapan laporan">
+            {LANGKAH.map((l, i) => {
+                const selesai = i < aktif;
+                const sekarang = i === aktif;
+                return (
+                    <li key={l.key} className="flex flex-1 items-center gap-2 sm:gap-3" aria-current={sekarang ? "step" : undefined}>
+                        <span
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                                selesai ? "bg-emerald-600 text-white" : sekarang ? "bg-blue-700 text-white ring-4 ring-blue-100" : "bg-slate-100 text-slate-500"
+                            }`}
+                        >
+                            {selesai ? <Check className="h-4 w-4" /> : i + 1}
+                        </span>
+                        <span className={`hidden text-sm sm:block ${sekarang ? "font-semibold text-slate-900" : "text-slate-500"}`}>
+                            {l.label}
+                            {i === 0 && step === 1 && <span className="block text-xs font-normal text-rose-600">Perlu revisi</span>}
+                        </span>
+                        {i < LANGKAH.length - 1 && <span className={`h-px flex-1 ${selesai ? "bg-emerald-300" : "bg-slate-200"}`} />}
+                    </li>
+                );
+            })}
+        </ol>
+    );
+}
+
+function Ringkasan({ siswa }) {
+    const rows = [
+        ["Nama siswa", siswa?.name],
+        ["Judul laporan", siswa?.laporan?.judul],
+        ["Email", siswa?.email],
+        ["Kontak", siswa?.kontak],
+        ["Tempat, tanggal lahir", siswa?.tempat_lahir && siswa?.tanggal_lahir ? `${siswa.tempat_lahir}, ${formatTanggal(siswa.tanggal_lahir, { panjang: true })}` : null],
+        ["Jurusan", siswa?.jurusan?.nama],
+        ["Tahun ajaran", siswa?.tahun_ajaran?.tahun],
+        ["Tempat PKL", siswa?.tempat?.nama],
+        ["Pembimbing DU/DI", siswa?.tempat?.user?.name],
+        ["Pembimbing sekolah", siswa?.pb_skl?.name],
+    ];
+    return (
+        <dl className="divide-y divide-slate-100">
+            {rows.map(([k, v]) => (
+                <div key={k} className="grid grid-cols-3 gap-3 py-2.5 text-sm">
+                    <dt className="text-slate-500">{k}</dt>
+                    <dd className="col-span-2 font-medium text-slate-900">{v || <span className="font-normal text-slate-400">Belum diisi</span>}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+export default function Create() {
+    const { laporan, laporans = [], step, siswa } = usePage().props;
+    const { data, setData, errors, post, processing, reset, setError } = useForm({ judul: "" });
+    const menunggu = laporans.find((l) => l.status === "pending");
+
+    const submit = (e) => {
         e.preventDefault();
+        if (data.judul.trim().length < 10) return setError("judul", "Judul minimal 10 karakter");
         post(route("laporan.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth?.flash.success) {
-                    reset();
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                }
-            },
+            preserveScroll: true,
+            onSuccess: (page) => !page.props.auth?.flash?.error && reset(),
         });
     };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        if (laporan !== null) {
-            router.delete(route("laporan.destroy", laporan.id), {
-                onSuccess: () => {
-                    post(route("laporan.store"), {
-                        onSuccess: (sccs) => {
-                            if (sccs.props.auth?.flash.success) {
-                                reset();
-                                toast.success(
-                                    `${sccs.props.auth.flash?.success}`
-                                );
-                            } else {
-                                toast.error(`${sccs.props.auth.flash?.error}`);
-                            }
-                        },
-                        onError: (e) => {
-                            console.log(e);
-                        },
-                    });
-                },
-            });
-        } else {
-            post(route("laporan.store"), {
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth?.flash.success) {
-                        reset();
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                    }
-                },
-         
-            });
-        }
-    };
+
     return (
         <AuthenticatedLayout>
-            <Head title="Pengajuan Tempat" />
-            <ToastContainer className={`w-96`} />
+            <Head title="Laporan PKL" />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Laporan PKL" title="Laporan PKL" quote="Ajukan judul laporan, tunggu persetujuan pembimbing, lalu unduh format dan rekap laporan.">
+                    <Link href={route("laporan.index")} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                        <History className="h-4 w-4" /> Riwayat Judul
+                    </Link>
+                </TitlePage>
 
-            <h1 className="text-center text-2xl mt-8 font-medium capitalize text-slate-900">
-                {step === null && "Saya Ingin Mengajukan Judul"}
-                {step === 1 && "Judul Yang Anda Buat Di Tolak Pembimbing"}
-                {step === 2 &&
-                    "Tunggu Keputusan Dari Pihak Sekolah / Pembimbing"}
-                {step === 3 && "Data Pribadi Saya Selama Magang"}
-            </h1>
-            <p className="mt-1 text-sm font-normal text-gray-700 text-center">
-                {step === null &&
-                    "Jika Diterima (accept) Oleh Pembimbing , Anda Akan Berada Di Tahap Selanjutnya"}
-            </p>
+                <Card>
+                    <CardBody>
+                        <Stepper step={step} />
+                    </CardBody>
+                </Card>
 
-            <ol className="p-3 overflow-x-auto flex items-center w-full text-sm font-medium text-center text-gray-900 sm:text-base">
-                <li
-                    className={`${
-                        step === null &&
-                        "bg-blue-700 px-4 py-1.5 text-white rounded-md"
-                    } flex items-center`}
-                >
-                    <span
-                        className={`${
-                            step === null &&
-                            "rounded-full bg-white text-black w-6 h-6 grid place-content-center"
-                        } me-2`}
-                    >
-                        1
-                    </span>
-                    Judul
-                </li>
-                <div className="h-1 border border-b-black w-full mx-4"></div>
-                <li
-                    className={`${
-                        step === 1 &&
-                        "bg-blue-700 px-4 py-1.5 text-white rounded-md"
-                    } flex items-center`}
-                >
-                    Revisi
-                </li>
-                <div className="h-1 border border-b-black w-full mx-4"></div>
-                <li
-                    className={`${
-                        step === 2 &&
-                        "bg-blue-700 px-4 py-1.5 text-white rounded-md"
-                    } flex items-center`}
-                >
-                    <span
-                        className={`${
-                            step === 2 &&
-                            "rounded-full bg-white text-black w-6 h-6 grid place-content-center"
-                        } me-2`}
-                    >
-                        2
-                    </span>
-                    Konfirmasi
-                </li>
-                <div className="h-1 border border-b-black w-full mx-4"></div>
-                <li
-                    className={`${
-                        step === 3 &&
-                        "bg-blue-700 px-4 py-1.5 text-white rounded-md"
-                    } flex items-center`}
-                >
-                    <span
-                        className={`${
-                            step === 3 &&
-                            "rounded-full bg-white text-black w-6 h-6 grid place-content-center"
-                        } me-2`}
-                    >
-                        3
-                    </span>
-                    Export
-                </li>
-            </ol>
+                {(step === null || step === undefined || step === 1) && (
+                    <Card>
+                        <CardHeader icon={<FileText />} title={step === 1 ? "Ajukan judul baru" : "Ajukan judul laporan"} description="Judul akan ditinjau oleh pembimbing Anda." />
+                        <CardBody className="space-y-4">
+                            {step === 1 && (
+                                <Callout tone="danger" title="Judul sebelumnya ditolak">
+                                    {laporan?.judul ? <>Judul &ldquo;{laporan.judul}&rdquo; ditolak pembimbing. </> : null}
+                                    Silakan ajukan judul yang sudah direvisi.
+                                </Callout>
+                            )}
+                            <form onSubmit={submit} noValidate className="space-y-4">
+                                <FormField label="Judul laporan" htmlFor="judul" required error={errors.judul} help={`${data.judul.length}/255 karakter, minimal 10.`}>
+                                    <TextInput
+                                        id="judul"
+                                        className="w-full"
+                                        maxLength={255}
+                                        autoComplete="off"
+                                        placeholder="Contoh: Sistem Informasi Inventaris Menggunakan Laravel"
+                                        value={data.judul}
+                                        onChange={(e) => setData("judul", e.target.value)}
+                                        invalid={!!errors.judul}
+                                    />
+                                </FormField>
+                                <PrimaryButton disabled={processing}>
+                                    {processing ? <Spinner /> : <Send />} Ajukan Judul
+                                </PrimaryButton>
+                            </form>
+                        </CardBody>
+                    </Card>
+                )}
 
-            {step === null && (
-                <>
-                    <div className="p-2">
-                        <form
-                            onSubmit={handleSubmit}
-                            className="p-4 md:p-8 space-y-4 grid grid-cols-2"
-                        >
-                            <div className="col-span-2 md:col-span-1">
-                                <InputLabel value={"Judul"} />
-                                <TextInput
-                                    id="judul"
-                                    type="text"
-                                    name="judul"
-                                    placeholder="Sistem ... Menggunakan Teknologi ..."
-                                    autoComplete="off"
-                                    value={data.judul}
-                                    className="mt-1 block w-full placeholder:text-gray-700"
-                                    onChange={(e) =>
-                                        setData("judul", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.judul}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                {" "}
-                                <SecondaryButton
-                                    type="submit"
-                                    className="gap-2 bg-blue-600 text-white focus:ring-2 focus:ring-blue-500"
-                                    disabled={processing}
-                                >
-                                    <Plus />
-                                    <span className="block">
-                                        {processing
-                                            ? "Proses..."
-                                            : "Ajukan Judul"}
-                                    </span>
-                                </SecondaryButton>
-                            </div>
-                        </form>{" "}
+                {step === 2 && (
+                    <Callout tone="info" title="Judul sedang ditinjau pembimbing">
+                        {menunggu ? <>&ldquo;{menunggu.judul}&rdquo; diajukan {formatTanggal(menunggu.created_at)}. </> : null}
+                        Anda akan bisa mengunduh laporan setelah judul diterima.
+                    </Callout>
+                )}
+
+                {step === 3 && (
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 [&>*]:min-w-0">
+                        <Card className="lg:col-span-2">
+                            <CardHeader title="Data laporan" description="Data ini dipakai pada halaman identitas laporan PKL." />
+                            <CardBody className="py-1">
+                                <Ringkasan siswa={siswa} />
+                            </CardBody>
+                        </Card>
+                        <Card>
+                            <CardHeader icon={<Download />} title="Unduhan" />
+                            <CardBody className="space-y-2">
+                                <a href={route("exportFormatlaporan")} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 hover:border-blue-300 hover:bg-blue-50/40">
+                                    Format penulisan laporan <Download className="h-4 w-4 text-blue-700" />
+                                </a>
+                                <a href={route("exportLaporan")} target="_blank" rel="noopener" className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-800 hover:border-blue-300 hover:bg-blue-50/40">
+                                    Rekap laporan PKL (PDF) <Download className="h-4 w-4 text-blue-700" />
+                                </a>
+                            </CardBody>
+                        </Card>
                     </div>
-                </>
-            )}
-            {step === 1 && (
-                <>
-                    <div className="p-2">
-                        <form
-                            onSubmit={handleUpdate}
-                            className="p-4 md:p-8 space-y-4 grid grid-cols-2"
-                        >
-                            <div className="col-span-2 md:col-span-1">
-                                <InputLabel value={"Perbarui Judul"} />
-                                <TextInput
-                                    id="judul"
-                                    type="text"
-                                    name="judul"
-                                    autoComplete="off"
-                                    
-                                    value={data.judul}
-                                    className="mt-1 block w-full"
-                                    onChange={(e) =>
-                                        setData("judul", e.target.value)
-                                    }
-                                />
-                                <InputError
-                                    message={errors.judul}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                {" "}
-                                <SecondaryButton
-                                    type="submit"
-                                    className="gap-2 bg-blue-600 text-white focus:ring-2 focus:ring-blue-500"
-                                    disabled={processing}
-                                >
-                                    <Plus />
-                                    <span className="block">
-                                        {processing
-                                            ? "Proses..."
-                                            : "Ajukan Judul Baru"}
-                                    </span>
-                                </SecondaryButton>
-                            </div>
-                        </form>{" "}
-                    </div>
-                </>
-            )}
-            {step === 3 && (
-                <>
-                    <table>
-                        <tbody>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Nama Siswa
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>{siswa?.name}</div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Judul Laporan
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>{siswa?.laporan?.judul}</div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">Email</td>
-                                <td className="text-left py-2 px-4">
-                                    <div>{siswa?.email}</div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">Kontak</td>
-                                <td className="text-left py-2 px-4">
-                                    <div>{siswa?.kontak}</div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Tempat , Tanggal Lahir
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.tempat_lahir},
-                                        {siswa?.tanggal_lahir}
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">Jurusan</td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.jurusan?.nama ?? "Belum Diisi"}
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Tahun Ajaran
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.tahun_ajaran?.tahun ??
-                                            "Belum Diisi"}
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Tempat Pkl
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.tempat?.nama ?? "Belum Diisi"}
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Pembimbing Pkl
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.tempat?.user?.name ??
-                                            "Belum Diisi"}
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="text-left py-2 px-4">
-                                    Pembimbing Sekolah
-                                </td>
-                                <td className="text-left py-2 px-4">
-                                    <div>
-                                        {siswa?.pb_skl?.name ?? "Belum Diisi"}
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <div className="mt-6 flex justify-start flex-wrap gap-2">
-                        <a
-                            href={route("exportFormatlaporan")}
-                            className="bg-blue-700 px-4 py-2 rounded-md ms-4 text-white flex justify-center gap-2 max-w-xs"
-                        >
-                            Export Format Laporan
-                            <Download />
-                        </a>
-                        <a
-                            href={route("exportLaporan")}
-                            target="_blank"
-                            className="bg-blue-700 px-4 py-2 rounded-md ms-4 text-white flex justify-center gap-2 max-w-xs"
-                        >
-                            Export Laporan
-                            <Download />
-                        </a>
-                    </div>
-                </>
-            )}
+                )}
+
+                {laporans.length > 0 && step !== 3 && (
+                    <Card>
+                        <CardHeader icon={<History />} title="Judul yang pernah diajukan" />
+                        <ul className="divide-y divide-slate-100">
+                            {laporans.map((l) => (
+                                <li key={l.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                                    <span className="min-w-0 text-sm text-slate-800">{l.judul}</span>
+                                    <StatusLaporan status={l.status} />
+                                </li>
+                            ))}
+                        </ul>
+                    </Card>
+                )}
+            </div>
         </AuthenticatedLayout>
     );
-};
-
-export default Form;
+}

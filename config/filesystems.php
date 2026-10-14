@@ -73,6 +73,19 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Folder Backup Foto
+    |--------------------------------------------------------------------------
+    |
+    | Sebelumnya dibaca langsung dengan env("BACKUP_PHOTOS") di controller,
+    | yang bernilai null setelah `php artisan config:cache`. Kosongkan untuk
+    | menonaktifkan backup.
+    |
+    */
+
+    'backup_photos' => env('BACKUP_PHOTOS'),
+
     'links' => [
         public_path('storage') => storage_path('app/public'),
     ],

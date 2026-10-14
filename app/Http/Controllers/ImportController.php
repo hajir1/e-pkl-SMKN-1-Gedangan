@@ -17,13 +17,15 @@ class ImportController extends Controller
 {
     public function importRegisterUser(Request $request)  {
         $request->validate([
-            "file"=>"required|mimes:xlsx,xls"
+            "file"=>"required|file|mimes:xlsx,xls|max:5120"
         ],[
             "file.required"=>"file wajib diisi dan format .xlsx , .xls"
         ]);
 
         $import = new DataSiswaImport();
-        Excel::import(new DataSiswaImport,$request->file("file"));
+        // Sebelumnya yang di-import adalah instance baru, sehingga
+        // $import->existingError tidak pernah terisi.
+        Excel::import($import,$request->file("file"));
 
          if (count($import->existingError) > 0) {
                 return back()->withErrors([
@@ -47,7 +49,15 @@ class ImportController extends Controller
     }
 
     public function exportSiswaToPdf($id)  {
-        $siswa = User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa","jurnals","nilai"])->withCount("jurnals")->findOrFail($id);
+        $siswa = User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa","jurnals","nilai"])->withCount("jurnals")->role("siswa")->findOrFail($id);
+
+        // Sebelumnya semua pengguna login bisa mengunduh data siswa mana pun.
+        $viewer = Auth::user();
+        $boleh = $viewer->hasRole("admin")
+            || ($viewer->hasRole("siswa") && (int) $siswa->id === (int) $viewer->id)
+            || ($viewer->hasRole("pembimbing_sekolah") && (int) $siswa->pembimbing_sekolah_id === (int) $viewer->id)
+            || ($viewer->hasRole("pembimbing_pt") && $siswa->tempat && (int) $siswa->tempat->pembimbing_id === (int) $viewer->id);
+        abort_unless($boleh, 403);
 
         $hadirs =$siswa->jurnals->where("keterangan","hadir")->count();
         $sakits =$siswa->jurnals->where("keterangan","sakit")->count();
@@ -55,16 +65,17 @@ class ImportController extends Controller
         // view PDF dengan data $siswa
         $pdf = Pdf::loadView('pdf.siswa', compact('siswa','hadirs','sakits','izins'));
 
-        return $pdf->stream('siswa-' . $siswa->name . '.pdf');
+        return $pdf->stream('siswa-' . str($siswa->name)->slug() . '.pdf');
     }
 
     public function exportFormatlaporan()  {
         $public_path = public_path("pdf/formatLaporan.pdf");
-        
+        abort_unless(file_exists($public_path), 404);
+
         return response()->download($public_path);
     }
     public function exportLaporan()  {
-        $user = User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa","laporan","nilai"])->where("id","=",Auth::user()->id)->first();
+        $user = User::with(["jurusan","tahunAjaran","pbSkl","tempat.user","nilai.pembimbing","dataSiswa","laporan","nilai","jurnals"])->where("id","=",Auth::user()->id)->first();
 
         $jumlahJurnals = $user->jurnals->count();
         $sakits = $user->jurnals->where("keterangan","sakit")->count();
@@ -72,15 +83,15 @@ class ImportController extends Controller
         $izins = $user->jurnals->where("keterangan","izin")->count();
         $pdf = Pdf::loadView("pdf.laporan",compact("user","sakits","hadirs","izins",'jumlahJurnals'))->setPaper("a4","potrait");
 
-        return $pdf->stream("laporan-". $user->name . ".pdf");
+        return $pdf->stream("laporan-". str($user->name)->slug() . ".pdf");
 
     }
 
     public function exportTempat(string $id) {
-        $tempat = Tempat::with("siswas","user.jurusan","user.dataSiswa")->where("id","=",$id)->first();
+        $tempat = Tempat::with("siswas","user.jurusan","user.dataSiswa")->findOrFail($id);
 
         $pdf =Pdf::loadView("pdf.tempat",compact("tempat"));
 
-        return $pdf->stream("$tempat->nama".".pdf");
+        return $pdf->stream(str($tempat->nama)->slug()->append(".pdf"));
     }
 }

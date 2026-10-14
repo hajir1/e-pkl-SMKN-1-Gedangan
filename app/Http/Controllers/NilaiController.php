@@ -4,87 +4,70 @@ namespace App\Http\Controllers;
 
 use App\Models\Jurnal;
 use App\Models\Nilai;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 class NilaiController extends Controller
 {
     /**
-     * Display a listing of the resource.
-     */
-    public function index()
-    {
-        //
-    }
-
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
+     * Pembimbing memberi nilai kepada siswa bimbingannya.
      */
     public function store(Request $request)
     {
         $validate = $request->validate([
-            "user_id"=>"required",
-            "nilai"=> "required",
+            "user_id"=>"required|integer|exists:users,id",
+            "nilai"=> "required|string|max:20",
             "keterangan"=>"required|max:200",
-            "pembimbing_id"=>"required"
         ],[
             "nilai.required"=>"Nilai Wajib Diisi",
             "keterangan.required"=>"Keterangan Wajib Diisi Minimal 1 Kata",
             "keterangan.max"=>"Keterangan Maksimal 200 Kata",
         ]);
-        $nilaiId = Nilai::with("siswa")->where("user_id","=",$validate["user_id"])->where("pembimbing_id","=",$validate["pembimbing_id"])->first();
+
+        $pembimbing = Auth::user();
+        $siswa = User::with('tempat')->role('siswa')->findOrFail($validate["user_id"]);
+
+        // pembimbing_id dulu diambil dari request sehingga bisa dipalsukan;
+        // sekarang selalu pengguna yang login, dan siswa harus bimbingannya.
+        $membimbing = ($pembimbing->hasRole('pembimbing_sekolah') && (int) $siswa->pembimbing_sekolah_id === (int) $pembimbing->id)
+            || ($pembimbing->hasRole('pembimbing_pt') && $siswa->tempat && (int) $siswa->tempat->pembimbing_id === (int) $pembimbing->id);
+        abort_unless($membimbing, 403);
+
+        $nilaiId = Nilai::with("siswa")->where("user_id","=",$siswa->id)->where("pembimbing_id","=",$pembimbing->id)->first();
 
         if($nilaiId){
            return redirect()->route("siswa.index")->with("error","Anda Telah Menambah Nilai Untuk {$nilaiId->siswa->name}");
         }
 
-        Nilai::create($validate);
+        Nilai::create([
+            "user_id"=>$siswa->id,
+            "pembimbing_id"=>$pembimbing->id,
+            "nilai"=>$validate["nilai"],
+            "keterangan"=>$validate["keterangan"],
+        ]);
 
         return redirect()->route("siswa.index")->with("success","Sukses Menambah Nilai Baru");
     }
 
     /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
+     * Endpoint lama untuk "menandai" jurnal (PUT nilai/{id}). Dipertahankan
+     * agar tombol yang sudah ada tetap berjalan, tetapi sekarang memakai
+     * aturan verifikasi yang sama dengan JurnalController@verifikasi.
      */
     public function update(Request $request, string $id)
     {
-       $jurnalId = Jurnal::findOrFail($id);
+        $jurnal = Jurnal::with('user.tempat')->findOrFail($id);
+        Gate::authorize('verify', $jurnal);
 
-       if($jurnalId){
-            $jurnalId->mark = true;
-            $jurnalId->save();
-       }
-       return redirect()->back()->with("success","Sukses Menandai Jurnal");
-    }
+        $jurnal->mark = true;
+        $jurnal->status_verifikasi = Jurnal::STATUS_DISETUJUI;
+        $jurnal->diverifikasi_oleh = Auth::id();
+        $jurnal->diverifikasi_at = now();
+        $jurnal->save();
+        Jurnal::flushCacheFor($jurnal->user_id);
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
-    {
-        //  
+        return redirect()->back()->with("success","Sukses Menandai Jurnal");
     }
 }

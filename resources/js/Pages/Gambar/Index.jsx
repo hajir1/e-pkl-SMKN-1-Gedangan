@@ -1,380 +1,167 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
 import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Edit, Plus, Trash, X } from "lucide-react";
-import TextInput from "@/Components/TextInput";
-import InputLabel from "@/Components/InputLabel";
-import InputError from "@/Components/InputError";
 import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
-import TitleModal from "@/Components/TitleModal";
-import Swal from "sweetalert2";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Filter from "@/Components/Filter";
-import Table from "@/Components/Table";
-import { toast, ToastContainer } from "react-toastify";
-const Index = () => {
-    const { gambars } = usePage().props;
-    const [createModal, setCreateModal] = useState(false);
-    const [img, setImg] = useState(null);
-    const [resizeImg, setResizeImg] = useState(null);
-    const [editModal, seteditModal] = useState(false);
-    const { data, setData, errors, post, processing, reset, put } = useForm({
-        url: "",
-    });
+import SecondaryButton from "@/Components/SecondaryButton";
+import Spinner from "@/Components/Spinner";
+import TextInput from "@/Components/TextInput";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import { formatTanggal, storageUrl } from "@/Helpers/format";
+import { useObjectUrl } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Expand, ImageOff, Images, Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 
-    const handleDelete = (e, id) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Gambar Ini`;
-        const cb = () =>
-            router.delete(route("gambar.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
+const MAX_KB = 2400;
+const TIPE = ["image/jpeg", "image/png", "image/avif"];
+
+function GambarModal({ show, gambar, onClose }) {
+    const isEdit = Boolean(gambar);
+    const { data, setData, post, processing, errors, setError, clearErrors, reset, transform, progress } = useForm({ url: null });
+    const preview = useObjectUrl(data.url);
+
+    useEffect(() => {
+        if (show) {
+            reset();
+            clearErrors();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show]);
+
+    const pilih = (e) => {
+        const file = e.target.files?.[0] ?? null;
+        clearErrors();
+        if (file && !TIPE.includes(file.type)) {
+            e.target.value = "";
+            return setError("url", "Gambar harus bertipe JPG, PNG, atau AVIF");
+        }
+        if (file && file.size > MAX_KB * 1024) {
+            e.target.value = "";
+            return setError("url", "Ukuran gambar maksimal 2,4 MB");
+        }
+        setData("url", file);
     };
-    const handleStore = (e) => {
-        e.preventDefault();
-        post(route("gambar.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash?.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    reset();
-                    setCreateModal(false);
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    setCreateModal(false);
-                }
-            },
-        });
-    };
 
-    const handleEdit = (e, id) => {
+    const submit = (e) => {
         e.preventDefault();
-
-        const filtered = gambars.data.find((gambar) => gambar.id === id);
-        if (filtered) {
-            setData("url", filtered.url);
-            setImg(null);
-            seteditModal(filtered);
+        if (!data.url) return setError("url", "Pilih gambar terlebih dahulu");
+        const opts = { preserveScroll: true, forceFormData: true, onSuccess: (page) => !page.props.auth?.flash?.error && onClose() };
+        if (isEdit) {
+            // Laravel tidak membaca file pada PUT multipart: kirim POST + _method.
+            transform((d) => ({ ...d, _method: "put" }));
+            post(route("gambar.update", gambar.id), opts);
+        } else {
+            transform((d) => d);
+            post(route("gambar.store"), opts);
         }
     };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        router.post(
-            route("gambar.update", editModal.id),
-            { url: data.url, _method: "put" },
-            {
-                forceFormData: true,
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth.flash?.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                        reset();
-                        seteditModal(null);
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                        seteditModal(null);
-                    }
-                },
-            }
+
+    return (
+        <Modal show={show} onClose={processing ? () => {} : onClose} maxWidth="lg">
+            <TitleModal title={isEdit ? "Ganti Gambar" : "Tambah Gambar Slider"} description="Ditampilkan pada slider halaman depan." onClick={onClose} />
+            <form onSubmit={submit} noValidate>
+                <ModalBody className="space-y-4">
+                    <div className="aspect-video overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                        {preview || gambar?.url ? (
+                            <img src={preview ?? storageUrl(gambar.url)} alt="Pratinjau" className="h-full w-full object-cover" />
+                        ) : (
+                            <div className="flex h-full items-center justify-center text-sm text-slate-400">Pratinjau gambar</div>
+                        )}
+                    </div>
+                    <FormField label="File gambar" htmlFor="url" required error={errors.url} help="JPG, PNG, atau AVIF. Maksimal 2,4 MB. Disarankan rasio 16:9.">
+                        <TextInput id="url" type="file" accept=".jpg,.jpeg,.png,.avif,image/jpeg,image/png,image/avif" className="w-full" onChange={pilih} invalid={!!errors.url} />
+                    </FormField>
+                    {progress && (
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-full bg-blue-600" style={{ width: `${progress.percentage}%` }} />
+                        </div>
+                    )}
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={onClose} disabled={processing}>Batal</SecondaryButton>
+                    <PrimaryButton disabled={processing || !data.url}>{processing ? <Spinner /> : <Upload />} Simpan</PrimaryButton>
+                </ModalFooter>
+            </form>
+        </Modal>
+    );
+}
+
+function Thumb({ g }) {
+    const [error, setError] = useState(false);
+    if (error) {
+        return (
+            <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400">
+                <ImageOff className="h-6 w-6" />
+            </div>
         );
-    };
-    const handleResizeImg = (e, id) => {
-        e.preventDefault();
-        const filtered = gambars.data.find((j) => j.id === id);
-        if (filtered) {
-            setResizeImg(filtered);
-        }
-    };
+    }
+    return <img src={storageUrl(g.url)} alt="Gambar slider" loading="lazy" onError={() => setError(true)} className="h-full w-full object-cover transition group-hover:scale-[1.02]" />;
+}
+
+export default function Index() {
+    const { gambars } = usePage().props;
+    const [form, setForm] = useState({ show: false, gambar: null });
+    const [lihat, setLihat] = useState(null);
+    const rows = gambars?.data ?? [];
+
+    const handleDelete = (g) =>
+        AlertConfirm("Gambar ini akan dihapus dari slider halaman depan.", "warning", () => router.delete(route("gambar.destroy", g.id), { preserveScroll: true }), "Ya, Hapus");
+
     return (
         <AuthenticatedLayout>
-            <Head title="Slider" />
-            <ToastContainer className={`w-96`} />
-            <TitlePage
-                nameRoute={"Tambah Gambar"}
-                quote={
-                    "list gambar / slider akan digunakan pada halaman welcome"
-                }
-                title={"Gambar / Slider"}
-                onClick={() => {
-                    setCreateModal(true);
-                    setData("url", "");
-                    setImg(null);
-                }}
-            ></TitlePage>
+            <Head title="Gambar Slider" />
+            <div className="space-y-6">
+                <TitlePage eyebrow="Master Data" title="Gambar Slider" quote="Gambar yang tampil bergantian di halaman depan.">
+                    <PrimaryButton type="button" onClick={() => setForm({ show: true, gambar: null })}>
+                        <Plus /> Tambah Gambar
+                    </PrimaryButton>
+                </TitlePage>
 
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-                    <Table
-                        headers={[
-                            { nama: "#" },
-                            { nama: "Gambar" },
-                            { nama: "Opsi" },
-                        ]}
-                    >
-                        <tbody>
-                            {gambars.data.length > 0 ? (
-                                gambars.data.map((gambar, index) => (
-                                    <tr
-                                        key={index}
-                                        className="bg-white border-b  border-gray-200"
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + gambars.from}
-                                        </td>
-
-                                        <td className="px-4 py-4">
-                                            <img
-                                                onClick={(e) =>
-                                                    handleResizeImg(
-                                                        e,
-                                                        gambar.id
-                                                    )
-                                                }
-                                                className="w-32 h-32 object-cover object-center rounded-md left-1/2 -translate-x-1/2 relative"
-                                                src={`./storage/${gambar.url}`}
-                                                alt=""
-                                                srcSet=""
-                                            />
-                                            <Modal
-                                                show={
-                                                    resizeImg?.id === gambar.id
-                                                }
-                                                onClose={() =>
-                                                    setResizeImg(null)
-                                                }
-                                                maxWidth="md"
-                                            >
-                                                <div className="rounded-lg bg-white shadow-sm">
-                                                    <TitleModal
-                                                        icon={<X />}
-                                                        title={"Detail Foto"}
-                                                        onClick={() => {
-                                                            setResizeImg(null);
-                                                        }}
-                                                    ></TitleModal>
-                                                    <div className="p-6 flex justify-center">
-                                                        <img
-                                                            className="max-w-xs p-2 rounded-md h-auto object-cover object-center"
-                                                            src={`./storage/${gambar.url}`}
-                                                            alt=""
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </Modal>
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center gap-2 items-center">
-                                                {" "}
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleEdit(e, gambar.id)
-                                                    }
-                                                    className="font-medium text-blue-600 hover:text-blue-500 cursor-pointer"
-                                                >
-                                                    <Edit />
-                                                </div>
-                                                <Modal
-                                                    show={
-                                                        editModal?.id ===
-                                                        gambar.id
-                                                    }
-                                                    onClose={() =>
-                                                        seteditModal(null)
-                                                    }
-                                                >
-                                                    <div className="relative bg-white rounded-lg shadow-sm ">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={`Edit Gambar`}
-                                                            onClick={() =>
-                                                                seteditModal(
-                                                                    !editModal
-                                                                )
-                                                            }
-                                                        ></TitleModal>
-                                                        <form
-                                                            onSubmit={
-                                                                handleUpdate
-                                                            }
-                                                            className="p-4 md:p-5"
-                                                        >
-                                                            <div className="grid gap-4 mb-4 grid-cols-2">
-                                                                <div className="col-span-2">
-                                                                    <InputLabel
-                                                                        value={
-                                                                            "Gambar"
-                                                                        }
-                                                                    />
-                                                                    <TextInput
-                                                                        id="url"
-                                                                        type="file"
-                                                                        name="url"
-                                                                        className="mt-1 block w-full p-2 border border-gray-400"
-                                                                        onChange={(
-                                                                            e
-                                                                        ) => {
-                                                                            const file =
-                                                                                e
-                                                                                    .target
-                                                                                    ?.files[0];
-                                                                            if (
-                                                                                file
-                                                                            ) {
-                                                                                setImg(
-                                                                                    file
-                                                                                );
-                                                                            }
-                                                                            setData(
-                                                                                "url",
-                                                                                file
-                                                                            );
-                                                                        }}
-                                                                    />
-                                                                    <InputError
-                                                                        message={
-                                                                            errors.url
-                                                                        }
-                                                                        className="mt-2"
-                                                                    />
-                                                                </div>
-                                                                {img ? (
-                                                                    <img
-                                                                        className={`h-28 mt-4 w-28 object-center object-cover`}
-                                                                        src={URL.createObjectURL(
-                                                                            img
-                                                                        )}
-                                                                        alt={
-                                                                            "No file Store"
-                                                                        }
-                                                                    />
-                                                                ) : (
-                                                                    <img
-                                                                        className={`h-28 mt-4 w-28 object-center object-cover`}
-                                                                        src={`./storage/${gambar.url}`}
-                                                                        alt={
-                                                                            "No file Store"
-                                                                        }
-                                                                    />
-                                                                )}
-                                                            </div>
-
-                                                            <PrimaryButton
-                                                                type="submit"
-                                                                className="gap-2"
-                                                                disabled={
-                                                                    processing
-                                                                }
-                                                            >
-                                                                <Edit />
-                                                                <span className="block">
-                                                                    {processing
-                                                                        ? "Proses..."
-                                                                        : "Ubah Gambar"}
-                                                                </span>
-                                                            </PrimaryButton>
-                                                        </form>
-                                                    </div>
-                                                </Modal>
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleDelete(
-                                                            e,
-                                                            gambar.id
-                                                        )
-                                                    }
-                                                    className="font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer"
-                                                >
-                                                    <Trash />
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Gambar Di tambahkan
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </Table>
-                </div>
-                {gambars.data.length > 0 && (
-                    <Pagination datas={gambars}></Pagination>
+                {rows.length === 0 ? (
+                    <Card>
+                        <EmptyState icon={<Images />} title="Belum ada gambar slider" description="Halaman depan akan memakai gambar bawaan sampai Anda menambahkan gambar." />
+                    </Card>
+                ) : (
+                    <Card className="overflow-hidden">
+                        <ul className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {rows.map((g) => (
+                                <li key={g.id} className="group overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                    <button type="button" onClick={() => setLihat(g)} className="block aspect-video w-full overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label="Lihat gambar ukuran penuh">
+                                        <Thumb g={g} />
+                                    </button>
+                                    <div className="flex items-center justify-between gap-2 px-3 py-2">
+                                        <span className="text-xs text-slate-500">Ditambahkan {formatTanggal(g.created_at)}</span>
+                                        <div className="flex items-center gap-1">
+                                            <IconButton label="Lihat" onClick={() => setLihat(g)}>
+                                                <Expand />
+                                            </IconButton>
+                                            <IconButton label="Ganti gambar" variant="primary" onClick={() => setForm({ show: true, gambar: g })}>
+                                                <Pencil />
+                                            </IconButton>
+                                            <IconButton label="Hapus gambar" variant="danger" onClick={() => handleDelete(g)}>
+                                                <Trash2 />
+                                            </IconButton>
+                                        </div>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                        <Pagination datas={gambars} />
+                    </Card>
                 )}
             </div>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah Slider"}
-                        onClick={() => {
-                            setCreateModal(!createModal);
-                        }}
-                    ></TitleModal>
-                    <form onSubmit={handleStore} className="p-4 md:p-5">
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="col-span-2">
-                                <InputLabel value={"Gambar"} />
-                                <TextInput
-                                    id="url"
-                                    type="file"
-                                    name="url"
-                                    className="mt-1 block w-full p-2 border border-gray-400"
-                                    onChange={(e) => {
-                                        const file = e.target?.files[0];
-                                        if (file) {
-                                            setImg(file);
-                                        }
-                                        setData("url", file);
-                                    }}
-                                />
-                                <InputError
-                                    message={errors.url}
-                                    className="mt-2"
-                                />
-                            </div>
-                            {img ? (
-                                <img
-                                    className={`h-28 mt-4 w-28 object-center object-cover`}
-                                    src={URL.createObjectURL(img)}
-                                    alt={"No file Store"}
-                                />
-                            ) : (
-                                <div className="w-28 h-28 text-center grid place-content-center bg-gray-200 mt-4">
-                                    <p className="font-medium  text-xs text-slate-900">
-                                        No File Uploaded
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing ? "Proses..." : "Tambah Gambar"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
+
+            <GambarModal show={form.show} gambar={form.gambar} onClose={() => setForm({ show: false, gambar: form.gambar })} />
+            <Modal show={Boolean(lihat)} onClose={() => setLihat(null)} maxWidth="4xl">
+                <TitleModal title="Pratinjau Gambar" onClick={() => setLihat(null)} />
+                <ModalBody>{lihat && <img src={storageUrl(lihat.url)} alt="Gambar slider" className="mx-auto max-h-[70vh] w-auto rounded-lg" />}</ModalBody>
             </Modal>
         </AuthenticatedLayout>
     );
-};
-
-export default Index;
+}

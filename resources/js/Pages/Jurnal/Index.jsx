@@ -1,820 +1,607 @@
-import React, { useEffect, useState } from "react";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import TitlePage from "@/Components/TitlePage";
+import { KeteranganBadge, StatusBadge } from "@/Components/Badge";
+import Card from "@/Components/Card";
+import EmptyState from "@/Components/EmptyState";
+import Filter from "@/Components/Filter";
+import FormField from "@/Components/FormField";
+import IconButton from "@/Components/IconButton";
+import ImageViewer from "@/Components/ImageViewer";
 import Modal from "@/Components/Modal";
-import { Head, router, useForm, usePage } from "@inertiajs/react";
-import { Check, Edit, Plus, Regex, Trash, X } from "lucide-react";
-import TextInput from "@/Components/TextInput";
-import InputLabel from "@/Components/InputLabel";
-import InputError from "@/Components/InputError";
+import { OptionSorting } from "@/Components/Option";
 import Pagination from "@/Components/Pagination";
 import PrimaryButton from "@/Components/PrimaryButton";
-import TitleModal from "@/Components/TitleModal";
-import { Alert, AlertConfirm } from "@/Helpers/Alert";
-import Filter from "@/Components/Filter";
-import Table from "@/Components/Table";
-import { OptionSorting } from "@/Components/Option";
-import Textarea from "@/Components/Textarea";
-import { toast, ToastContainer, Zoom } from "react-toastify";
-import moment from "moment";
 import SecondaryButton from "@/Components/SecondaryButton";
+import Select from "@/Components/Select";
+import Table, { Td, TableEmpty, Tr } from "@/Components/Table";
+import TextInput from "@/Components/TextInput";
+import TitleModal, { ModalBody, ModalFooter } from "@/Components/TitleModal";
+import TitlePage from "@/Components/TitlePage";
+import { AlertConfirm } from "@/Helpers/Alert";
+import {
+    cleanParams,
+    escapeRegExp,
+    formatPeriode,
+    formatSisaWaktu,
+    formatTanggal,
+    formatTanggalWaktu,
+    periodeMingguDari,
+    sisaWaktu,
+    storageUrl,
+} from "@/Helpers/format";
+import { useNow } from "@/Helpers/hooks";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import {
+    CalendarCheck2,
+    CheckCircle2,
+    Clock3,
+    Download,
+    FileText,
+    Pencil,
+    RotateCcw,
+    Send,
+    Trash2,
+    XCircle,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import AbsensiFormModal from "./AbsensiFormModal";
+import VerifikasiModal from "./VerifikasiModal";
+
+const FILTER_KEYS = ["keterangan", "status", "marking", "start_date", "end_date", "sort_by"];
+
+const STATUS_TABS = [
+    { value: "", label: "Semua" },
+    { value: "pending", label: "Menunggu" },
+    { value: "disetujui", label: "Disetujui" },
+    { value: "ditolak", label: "Ditolak" },
+];
+
+/** Periode minggu absensi; data lama (harian) belum punya minggu_mulai. */
+const periodeJurnal = (j) =>
+    j.minggu_mulai
+        ? formatPeriode(j.minggu_mulai, j.minggu_selesai)
+        : formatTanggal(j.created_at);
+
+const Highlight = ({ text, term }) => {
+    if (!term || !text) return text ?? "";
+    // Sebelumnya input pencarian langsung dipakai sebagai RegExp, sehingga
+    // karakter seperti "(" atau "+" membuat halaman crash.
+    const parts = String(text).split(new RegExp(`(${escapeRegExp(term)})`, "gi"));
+    return parts.map((part, i) =>
+        part.toLowerCase() === term.toLowerCase() ? (
+            <mark key={i} className="rounded bg-amber-100 px-0.5 text-slate-900">
+                {part}
+            </mark>
+        ) : (
+            <span key={i}>{part}</span>
+        )
+    );
+};
+
+/** Kartu status absensi minggu berjalan (khusus siswa). */
+function MingguIniCard({ periode, absensi, onKirim, onEdit }) {
+    const now = useNow(60000);
+    const sisa = sisaWaktu(periode.selesai, now);
+    const status = absensi?.status_verifikasi ?? (absensi?.mark ? "disetujui" : "pending");
+    const diSampah = Boolean(absensi?.deleted_at);
+
+    let isi;
+    if (!absensi) {
+        isi = (
+            <>
+                <div className="flex items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                        <Clock3 className="h-5 w-5" />
+                    </span>
+                    <div>
+                        <p className="font-semibold text-slate-900">
+                            Anda belum mengirim absensi minggu ini
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-600">
+                            Batas pengiriman: Minggu, {formatTanggal(periode.selesai, { panjang: true })} pukul 23.59 WIB
+                            {" · "}
+                            <span className="font-medium text-amber-700">
+                                {formatSisaWaktu(sisa)}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+                <PrimaryButton type="button" onClick={onKirim} className="w-full sm:w-auto">
+                    <Send /> Kirim Absensi
+                </PrimaryButton>
+            </>
+        );
+    } else if (diSampah) {
+        isi = (
+            <>
+                <div className="flex items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                        <Trash2 className="h-5 w-5" />
+                    </span>
+                    <div>
+                        <p className="font-semibold text-slate-900">
+                            Absensi minggu ini ada di Sampah
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-600">
+                            Pulihkan absensi tersebut, atau hapus permanen
+                            terlebih dahulu sebelum mengirim yang baru.
+                        </p>
+                    </div>
+                </div>
+                <Link
+                    href={route("trashJurnal.index")}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto"
+                >
+                    <RotateCcw className="h-4 w-4" /> Buka Sampah
+                </Link>
+            </>
+        );
+    } else {
+        const meta = {
+            pending: {
+                bg: "bg-amber-100 text-amber-700",
+                icon: <Clock3 className="h-5 w-5" />,
+                judul: "Absensi terkirim, menunggu verifikasi pembimbing",
+            },
+            disetujui: {
+                bg: "bg-emerald-100 text-emerald-700",
+                icon: <CheckCircle2 className="h-5 w-5" />,
+                judul: "Absensi minggu ini sudah disetujui",
+            },
+            ditolak: {
+                bg: "bg-rose-100 text-rose-700",
+                icon: <XCircle className="h-5 w-5" />,
+                judul: "Absensi minggu ini ditolak, silakan perbaiki",
+            },
+        }[status];
+        isi = (
+            <>
+                <div className="flex min-w-0 items-start gap-3">
+                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${meta.bg}`}>
+                        {meta.icon}
+                    </span>
+                    <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{meta.judul}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                            <KeteranganBadge value={absensi.keterangan} />
+                            <span>Dikirim {formatTanggalWaktu(absensi.created_at)}</span>
+                        </div>
+                        {absensi.catatan_verifikasi && (
+                            <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                                <span className="font-medium">Catatan pembimbing:</span>{" "}
+                                {absensi.catatan_verifikasi}
+                            </p>
+                        )}
+                    </div>
+                </div>
+                {status !== "disetujui" && (
+                    <SecondaryButton onClick={onEdit} className="w-full sm:w-auto">
+                        <Pencil /> {status === "ditolak" ? "Perbaiki Absensi" : "Ubah Absensi"}
+                    </SecondaryButton>
+                )}
+            </>
+        );
+    }
+
+    return (
+        <Card className="overflow-hidden">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-blue-700 to-blue-600 px-5 py-3 text-white">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                    <CalendarCheck2 className="h-4 w-4" /> Absensi minggu ini
+                </p>
+                <p className="text-sm text-blue-100">
+                    {formatPeriode(periode.mulai, periode.selesai)}
+                </p>
+            </div>
+            <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                {isi}
+            </div>
+        </Card>
+    );
+}
+
 const Index = () => {
-    const { jurnals, auth, user, filters } = usePage().props;
-    const [currentDate, setCurrentDate] = useState("");
-    const [createModal, setCreateModal] = useState(false);
-    const [editModal, seteditModal] = useState(null);
+    const {
+        jurnals,
+        auth,
+        filters,
+        periodeMinggu,
+        absensiMingguIni,
+        sudahAbsenMingguIni,
+    } = usePage().props;
+    const isSiswa = auth.role === "siswa";
+    const bisaVerifikasi = ["admin", "pembimbing_pt", "pembimbing_sekolah"].includes(auth.role);
+
+    const periode = useMemo(() => {
+        if (periodeMinggu?.mulai) return periodeMinggu;
+        const p = periodeMingguDari();
+        return { mulai: p.mulai, selesai: p.selesai };
+    }, [periodeMinggu]);
+
+    const [formModal, setFormModal] = useState({ show: false, jurnal: null });
+    const [verifikasi, setVerifikasi] = useState({ jurnal: null, mode: null });
     const [sortModal, setSortModal] = useState(false);
-    const [resizeImg, setResizeImg] = useState(null);
-    const [img, setImg] = useState(null);
-    const { data, setData, errors, post, processing, reset, put } = useForm({
-        keterangan: "",
-        kegiatan: "",
-        photo: null,
-    });
-    const { data: dataSearch, setData: setDataSearch } = useForm({
+    const [dataSearch, setDataSearch] = useState({
         search: filters?.search ?? "",
         sort_by: filters?.sort_by ?? "",
         sort_order: filters?.sort_order ?? "",
         keterangan: filters?.keterangan ?? "",
+        status: filters?.status ?? "",
         marking: filters?.marking ?? "",
         start_date: filters?.start_date ?? "",
         end_date: filters?.end_date ?? "",
     });
-    const handleDelete = (e, id) => {
-        e.preventDefault();
-        const text = `Apakah Anda Yakin Ingin Menghapus Jurnal Ini ?`;
-        const cb = () =>
-            router.delete(route("jurnal.destroy", id), {
-                onSuccess: (sccs) => {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                },
-            });
-        AlertConfirm(text, "warning", cb);
-    };
-    const handleStore = (e) => {
-        e.preventDefault();
-        post(route("jurnal.store"), {
-            onSuccess: (sccs) => {
-                if (sccs.props.auth.flash.success) {
-                    toast.success(`${sccs.props.auth.flash?.success}`);
-                    setCreateModal(false);
-                    setImg(null);
-                    reset();
-                } else {
-                    toast.error(`${sccs.props.auth.flash?.error}`);
-                    setCreateModal(false);
-                }
-            },
-        });
-    };
-    const handleEdit = (e, id) => {
-        e.preventDefault();
-        const filtered = jurnals.data.find((j) => j.id === id);
-        if (filtered) {
-            setData("kegiatan", filtered.kegiatan);
-            setData("keterangan", filtered?.keterangan ?? "");
-            setData("photo", filtered.photo);
-            seteditModal(filtered);
-        }
-    };
-    const handleUpdate = (e) => {
-        e.preventDefault();
-        router.post(
-            route("jurnal.update", editModal.id),
-            {
-                ...data,
-                _method: "put",
-            },
-            {
-                onSuccess: (sccs) => {
-                    if (sccs.props.auth.flash?.success) {
-                        toast.success(`${sccs.props.auth.flash?.success}`);
-                        reset();
-                        seteditModal(null);
-                    } else {
-                        toast.error(`${sccs.props.auth.flash?.error}`);
-                        seteditModal(null);
-                    }
-                },
-            }
-        );
-    };
-    const handleMarkJurnal = (e, id) => {
-        e.preventDefault();
-        router.put(route("nilai.update", id), {
-            mark: true,
-        });
-    };
-    const handleSearchChange = (e) => {
-        e.preventDefault();
-        const { name, value } = e.target;
-        const update = {
-            ...dataSearch,
-            [name]: value,
-        };
-        setDataSearch(update);
-        const params = {};
-        if (update.search !== "") params.search = update.search;
-        if (update.sort_by !== "") params.sort_by = update.sort_by;
-        if (update.sort_by !== "" && update.sort_order !== "")
-            params.sort_order = update.sort_order;
-        if (update.marking !== "") params.marking = update.marking;
-        if (update.keterangan !== "") params.keterangan = update.keterangan;
-        if (update.start_date !== "") params.start_date = update.start_date;
-        if (update.start_date !== "" && update.end_date !== "")
-            params.end_date = update.end_date;
 
+    const activeCount = FILTER_KEYS.filter((k) => (filters?.[k] ?? "") !== "").length;
+
+    const kirimFilter = (update) => {
+        const params = cleanParams({
+            ...update,
+            sort_order: update.sort_by ? update.sort_order : "",
+            end_date: update.start_date ? update.end_date : "",
+        });
         router.get(route("jurnal.index"), params, {
             preserveState: true,
             preserveScroll: true,
+            replace: true,
         });
     };
-    const handleResizeImg = (e, id) => {
-        e.preventDefault();
-        const filtered = jurnals.data.find((j) => j.id === id);
-        if (filtered) {
-            setResizeImg(filtered);
-        }
-    };
-    const handleTimeLeft = () => {
-        const now = moment();
-        let target = moment().set({
-            hour: 24,
-            minute: 0,
-            second: 0,
-            millisecond: 0,
-        });
-        if (now.isAfter(target)) {
-            target = target.add(1, "day");
-        }
-        const duration = moment.duration(target.diff(now));
 
-        return {
-            hours: String(duration.hours()).padStart(2, "0"),
-            minutes: String(duration.minutes()).padStart(2, "0"),
-            seconds: String(duration.seconds()).padStart(2, "0"),
-        };
+    const handleSearchChange = (e) => {
+        e.preventDefault?.();
+        const { name, value } = e.target;
+        const update = { ...dataSearch, [name]: value };
+        setDataSearch(update);
+        kirimFilter(update);
     };
-    const handleExportJurnal = (e) => {
-        e.preventDefault();
+
+    const resetFilter = () => {
+        const update = {
+            search: dataSearch.search,
+            sort_by: "",
+            sort_order: "",
+            keterangan: "",
+            status: "",
+            marking: "",
+            start_date: "",
+            end_date: "",
+        };
+        setDataSearch(update);
+        kirimFilter(update);
+    };
+
+    const handleDelete = (jurnal) => {
         AlertConfirm(
-            `Apakah anda yakin ingin export jurnal, data yang di export adalah data yang belum di filter dan sorting`,
+            `Absensi periode ${periodeJurnal(jurnal)} akan dipindahkan ke Sampah. Anda masih bisa memulihkannya dari menu Sampah Absensi.`,
+            "warning",
+            () =>
+                router.delete(route("jurnal.destroy", jurnal.id), {
+                    preserveScroll: true,
+                }),
+            "Ya, Hapus"
+        );
+    };
+
+    const handleExportJurnal = () => {
+        AlertConfirm(
+            "Data absensi akan diekspor ke Excel sesuai filter dan pencarian yang sedang aktif.",
             "question",
             () => {
-                window.location.href = route(
-                    "jurnals.export",
-                    {
-                        search: filters?.search,
-                        sort_by: filters?.sort_by,
-                        sort_order: filters?.sort_order,
-                        keterangan: filters?.keterangan,
-                        marking: filters?.marking,
-                        start_date: filters?.start_date,
-                        end_date: filters?.end_date,
-                    },
-                    true
-                );
-                toast.success(`sukses meng export data ke excel`);
+                window.location.href = route("jurnals.export", cleanParams(filters ?? {}));
             },
-            "Ya, Export!"
+            "Ya, Ekspor"
         );
     };
 
-    const handleSteemingString = (str) => {
-        if (!filters?.search) return str;
-        const regex = new RegExp(`(${filters?.search})`, "gi");
-        const parts = str.split(regex);
+    const headers = [
+        { nama: "#", className: "w-12" },
+        ...(isSiswa ? [] : [{ nama: "Siswa" }]),
+        { nama: "Periode" },
+        { nama: "Keterangan" },
+        { nama: "Kegiatan" },
+        { nama: "Bukti" },
+        { nama: "Status" },
+        { nama: "Aksi", className: "text-right" },
+    ];
 
-        return parts.map((part, index) =>
-            part.toLowerCase() === filters?.search.toLowerCase() ? (
-                <span
-                    key={index}
-                    className="font-extrabold text-green-100 bg-black"
-                >
-                    {part}
-                </span>
-            ) : (
-                <span key={index}>{part}</span>
-            )
-        );
-    };
-    useEffect(() => {
-        const interval = setInterval(() => {
-            const t = handleTimeLeft();
-            setCurrentDate(`${t.hours}-${t.minutes}-${t.seconds}`);
-        }, 1000);
-
-        return () => {
-            clearInterval(interval);
-        };
-    }, []);
+    const rows = jurnals?.data ?? [];
 
     return (
         <AuthenticatedLayout>
-            <Head title="Jurnal" />
-            <ToastContainer transition={Zoom} className={`w-96`} />
-            <TitlePage
-                nameRoute={`Tambah Jurnal`}
-                quote={``}
-                title={`Jurnal Milik ${auth.user.name}`}
-                onClick={() => {
-                    setCreateModal(true);
-                    setData("kegiatan", "");
-                    setData("keterangan", "");
-                    setData("photo", "");
-                }}
-                disabled={auth.role !== "siswa"}
-            >
-                <SecondaryButton
-                    onClick={(e) => handleExportJurnal(e)}
-                    className="bg-blue-700 text-white px-3 py-1 rounded-md"
+            <Head title={isSiswa ? "Absensi Mingguan" : "Absensi & Jurnal"} />
+
+            <div className="space-y-6">
+                <TitlePage
+                    eyebrow="Absensi PKL"
+                    title={isSiswa ? "Absensi Mingguan" : "Absensi & Jurnal Siswa"}
+                    quote={
+                        isSiswa
+                            ? "Kirim absensi satu kali setiap minggu (Senin - Minggu) dengan lampiran PDF. Pembimbing akan memverifikasi absensi Anda."
+                            : "Pantau dan verifikasi absensi mingguan siswa. Periksa PDF bukti sebelum menyetujui atau menolak."
+                    }
                 >
-                    Export
-                </SecondaryButton>
-            </TitlePage>
-            <span className="block text-sm text-gray-700 text-center">
-                Batas Pengumpulan Jurnal Hari Ini : {currentDate}
-            </span>
-            <Filter
-                sortModal={sortModal}
-                value={dataSearch.search}
-                onChange={handleSearchChange}
-                setSortModal={setSortModal}
-            />
-            <div className="p-2">
-                <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
-                    <Table
-                        headers={[
-                            { nama: "#" },
-                            { nama: "Nama" },
-                            { nama: "Keterangan" },
-                            { nama: "Kegiatan" },
-                            { nama: "Photo" },
-                            { nama: "Dibuat Pada" },
-                            { nama: "Status" },
-                            { nama: "Opsi" },
-                        ]}
-                    >
+                    <SecondaryButton onClick={handleExportJurnal}>
+                        <Download /> Ekspor Excel
+                    </SecondaryButton>
+                    {isSiswa && !sudahAbsenMingguIni && (
+                        <PrimaryButton
+                            type="button"
+                            onClick={() => setFormModal({ show: true, jurnal: null })}
+                        >
+                            <Send /> Kirim Absensi
+                        </PrimaryButton>
+                    )}
+                </TitlePage>
+
+                {isSiswa && (
+                    <MingguIniCard
+                        periode={periode}
+                        absensi={absensiMingguIni}
+                        onKirim={() => setFormModal({ show: true, jurnal: null })}
+                        onEdit={() => setFormModal({ show: true, jurnal: absensiMingguIni })}
+                    />
+                )}
+
+                <Card className="overflow-hidden">
+                    <div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-4 pt-3" role="tablist" aria-label="Status verifikasi">
+                        {STATUS_TABS.map((tab) => {
+                            const active = (filters?.status ?? "") === tab.value;
+                            return (
+                                <button
+                                    key={tab.value}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={active}
+                                    onClick={() =>
+                                        handleSearchChange({
+                                            target: { name: "status", value: tab.value },
+                                        })
+                                    }
+                                    className={`-mb-px whitespace-nowrap border-b-2 px-3 pb-2.5 text-sm font-medium transition ${
+                                        active
+                                            ? "border-blue-700 text-blue-800"
+                                            : "border-transparent text-slate-500 hover:text-slate-800"
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <Filter
+                        sortModal={sortModal}
+                        setSortModal={setSortModal}
+                        value={dataSearch.search}
+                        onChange={handleSearchChange}
+                        activeCount={activeCount}
+                        placeholder={isSiswa ? "Cari kegiatan..." : "Cari nama siswa atau kegiatan..."}
+                    />
+
+                    <Table headers={headers} minWidth="min-w-[860px]">
                         <tbody>
-                            {jurnals.data.length > 0 ? (
-                                jurnals.data.map((jurnal, index) => (
-                                    <tr
-                                        key={index}
-                                        className="bg-white border-b  border-gray-200"
-                                    >
-                                        <td className="px-4 text-center py-4">
-                                            {index + jurnals.from}
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {jurnal.user.name}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {jurnal.keterangan === "hadir" && (
-                                                <span className="bg-green-100 text-green-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-green-500">
-                                                    {jurnal.keterangan}
+                            {rows.length > 0 ? (
+                                rows.map((jurnal, index) => {
+                                    const status =
+                                        jurnal.status_verifikasi ??
+                                        (jurnal.mark ? "disetujui" : "pending");
+                                    const bisaUbah = isSiswa && status !== "disetujui";
+                                    return (
+                                        <Tr key={jurnal.id}>
+                                            <Td className="text-slate-500">
+                                                {index + (jurnals.from ?? 1)}
+                                            </Td>
+                                            {!isSiswa && (
+                                                <Td className="font-medium text-slate-900">
+                                                    <Highlight text={jurnal.user?.name} term={filters?.search} />
+                                                </Td>
+                                            )}
+                                            <Td className="whitespace-nowrap">
+                                                <span className="font-medium text-slate-900">
+                                                    {periodeJurnal(jurnal)}
                                                 </span>
-                                            )}
-                                            {jurnal.keterangan === "sakit" && (
-                                                <span className="bg-blue-100 text-blue-800 text-sm font-medium ring-2 me-2 px-2.5 py-0.5 rounded-md ring-blue-500">
-                                                    {jurnal.keterangan}
+                                                <span className="block text-xs text-slate-500">
+                                                    Dikirim {formatTanggal(jurnal.created_at)}
                                                 </span>
-                                            )}
-                                            {jurnal.keterangan === "izin" && (
-                                                <span className="bg-red-100 text-red-800 text-sm font-medium ring-2 ring-red-500 me-2 px-2.5 py-0.5 rounded-md">
-                                                    {jurnal.keterangan}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            {handleSteemingString(
-                                                jurnal.kegiatan
-                                            )}
-                                        </td>
-                                        <td className="px-4 text-center py-4">
-                                            <div className="flex justify-center items-center">
-                                                <img
-                                                    onClick={(e) =>
-                                                        handleResizeImg(
-                                                            e,
-                                                            jurnal.id
-                                                        )
-                                                    }
-                                                    loading="lazy"
-                                                    className="w-12 rounded-md h-12 object-cover object-center"
-                                                    src={`./storage/${jurnal.photo}`}
-                                                    alt="jurnal Photo"
-                                                />
-                                                <Modal
-                                                    show={
-                                                        resizeImg?.id ===
-                                                        jurnal.id
-                                                    }
-                                                    onClose={() =>
-                                                        setResizeImg(null)
-                                                    }
-                                                    maxWidth="md"
-                                                >
-                                                    <div className="rounded-lg bg-white shadow-sm">
-                                                        <TitleModal
-                                                            icon={<X />}
-                                                            title={
-                                                                "Detail Foto"
-                                                            }
-                                                            onClick={() => {
-                                                                setResizeImg(
-                                                                    null
-                                                                );
-                                                            }}
-                                                        ></TitleModal>
-                                                        <div className="p-6 flex justify-center">
-                                                            <img
-                                                                className="max-w-xs md:max-w-sm p-2 rounded-md h-auto object-cover object-center"
-                                                                src={`./storage/${jurnal.photo}`}
-                                                                alt=""
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </Modal>
-                                            </div>
-                                        </td>
-
-                                        <td className="px-4 text-center py-4">
-                                            {(() => {
-                                                const date = new Date(
-                                                    jurnal.created_at
-                                                );
-                                                const day = String(
-                                                    date.getDate()
-                                                ).padStart(2, "0");
-                                                const month = String(
-                                                    date.getMonth() + 1
-                                                ).padStart(2, "0");
-                                                const year = date.getFullYear();
-                                                return `${day}-${month}-${year}`;
-                                            })()}
-                                        </td>
-                                        <td className="px-4 text-center py-4 cursor-pointer">
-                                            {jurnal.mark ? (
-                                                auth.role === "siswa" ? (
-                                                    <p className="text-blue-700">
-                                                        Dilihat
-                                                    </p>
-                                                ) : (
-                                                    <div className="flex justify-center text-blue-700">
-                                                        <Check />
-                                                    </div>
-                                                )
-                                            ) : auth.role === "siswa" ? (
-                                                <p className="text-red-700">
-                                                    Belum Dilihat
+                                            </Td>
+                                            <Td>
+                                                <KeteranganBadge value={jurnal.keterangan} />
+                                            </Td>
+                                            <Td className="max-w-xs">
+                                                <p className="line-clamp-2" title={jurnal.kegiatan}>
+                                                    <Highlight text={jurnal.kegiatan} term={filters?.search} />
                                                 </p>
-                                            ) : (
-                                                <div
-                                                    onClick={(e) =>
-                                                        handleMarkJurnal(
-                                                            e,
-                                                            jurnal.id
-                                                        )
-                                                    }
-                                                    className="flex justify-center text-red-700"
-                                                >
-                                                    <X />
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-4 ">
-                                            {auth.role === "siswa" && (
-                                                <div className="flex justify-center items-center gap-2">
-                                                    {!jurnal?.mark && (
-                                                        <div
-                                                            onClick={(e) =>
-                                                                handleEdit(
-                                                                    e,
-                                                                    jurnal.id
-                                                                )
-                                                            }
-                                                            className={`text-blue-600 hover:text-blue-500 font-medium cursor-pointer`}
+                                            </Td>
+                                            <Td>
+                                                <div className="flex items-center gap-2">
+                                                    {jurnal.pdf_url ? (
+                                                        <a
+                                                            href={jurnal.pdf_url}
+                                                            target="_blank"
+                                                            rel="noopener"
+                                                            className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 hover:bg-rose-100"
                                                         >
-                                                            <Edit />
-                                                        </div>
+                                                            <FileText className="h-3.5 w-3.5" /> PDF
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400">Tanpa PDF</span>
                                                     )}
-                                                    <Modal
-                                                        show={
-                                                            editModal?.id ===
-                                                            jurnal.id
-                                                        }
-                                                        onClose={() =>
-                                                            seteditModal(null)
-                                                        }
-                                                    >
-                                                        <div className="relative bg-white rounded-lg shadow-sm ">
-                                                            <TitleModal
-                                                                icon={<X />}
-                                                                title={
-                                                                    "Edit Jurnal"
-                                                                }
-                                                                onClick={() => {
-                                                                    seteditModal(
-                                                                        null
-                                                                    );
-                                                                }}
-                                                            ></TitleModal>
-                                                            <form
-                                                                onSubmit={
-                                                                    handleUpdate
-                                                                }
-                                                                className="p-4 md:p-5"
-                                                            >
-                                                                <div className="grid gap-4 mb-4 grid-cols-2">
-                                                                    <div className="col-span-2">
-                                                                        <InputLabel
-                                                                            value={
-                                                                                "Keterangan"
-                                                                            }
-                                                                        />
-                                                                        <select
-                                                                            onChange={(
-                                                                                e
-                                                                            ) =>
-                                                                                setData(
-                                                                                    "keterangan",
-                                                                                    e
-                                                                                        .target
-                                                                                        .value
-                                                                                )
-                                                                            }
-                                                                            value={
-                                                                                data?.keterangan
-                                                                            }
-                                                                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                                                        >
-                                                                            <option
-                                                                                disabled
-                                                                                value=""
-                                                                            >
-                                                                                Default
-                                                                            </option>
-                                                                            <option value="hadir">
-                                                                                Hadir
-                                                                            </option>
-                                                                            <option value="sakit">
-                                                                                Sakit
-                                                                            </option>
-                                                                            <option value="izin">
-                                                                                Izin
-                                                                            </option>
-                                                                        </select>
-
-                                                                        <InputError
-                                                                            message={
-                                                                                errors.keterangan
-                                                                            }
-                                                                            className="mt-2"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="col-span-2">
-                                                                        <InputLabel
-                                                                            value={
-                                                                                "Kegiatan"
-                                                                            }
-                                                                        />
-                                                                        <Textarea
-                                                                            id="kegiatan"
-                                                                            value={
-                                                                                data?.kegiatan
-                                                                            }
-                                                                            onChange={(
-                                                                                e
-                                                                            ) =>
-                                                                                setData(
-                                                                                    "kegiatan",
-                                                                                    e
-                                                                                        .target
-                                                                                        .value
-                                                                                )
-                                                                            }
-                                                                            name="kegiatan"
-                                                                            placeholder={`Deskripsikan Kegiatan Anda`}
-                                                                        />
-                                                                        <InputError
-                                                                            message={
-                                                                                errors.kegiatan
-                                                                            }
-                                                                            className="mt-2"
-                                                                        />
-                                                                    </div>
-                                                                    <div className="col-span-2">
-                                                                        <InputLabel
-                                                                            value={
-                                                                                "Bukti Photo"
-                                                                            }
-                                                                        />
-                                                                        <TextInput
-                                                                            id="photo"
-                                                                            type="file"
-                                                                            name="photo"
-                                                                            accept="image/*"
-                                                                            className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                                                            onChange={(
-                                                                                e
-                                                                            ) => {
-                                                                                const file =
-                                                                                    e
-                                                                                        .target
-                                                                                        .files?.[0];
-                                                                                setData(
-                                                                                    "photo",
-                                                                                    file
-                                                                                );
-                                                                                setImg(
-                                                                                    file
-                                                                                );
-                                                                            }}
-                                                                        />
-                                                                        <InputError
-                                                                            message={
-                                                                                errors.photo
-                                                                            }
-                                                                            className="mt-2"
-                                                                        />
-                                                                    </div>
-                                                                    {editModal?.photo ? (
-                                                                        <img
-                                                                            className={`h-28 mt-4 w-28 object-center object-cover`}
-                                                                            src={`${
-                                                                                data?.photo instanceof
-                                                                                File
-                                                                                    ? URL.createObjectURL(
-                                                                                          data?.photo
-                                                                                      )
-                                                                                    : `./storage/${data.photo}`
-                                                                            }`}
-                                                                            alt={
-                                                                                "No file Store"
-                                                                            }
-                                                                        />
-                                                                    ) : img ? (
-                                                                        <img
-                                                                            className={`h-28 mt-4 w-28 object-center object-cover`}
-                                                                            src={URL.createObjectURL(
-                                                                                img
-                                                                            )}
-                                                                            alt={
-                                                                                "No file Store"
-                                                                            }
-                                                                        />
-                                                                    ) : (
-                                                                        <div className="w-28 h-28 text-center grid place-content-center bg-gray-200 mt-4">
-                                                                            <p className="font-medium  text-xs text-slate-900">
-                                                                                No
-                                                                                File
-                                                                                Uploaded
-                                                                            </p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <PrimaryButton
-                                                                    type="submit"
-                                                                    className="gap-2"
-                                                                    disabled={
-                                                                        processing
-                                                                    }
-                                                                >
-                                                                    <Edit />
-                                                                    <span className="block">
-                                                                        {processing
-                                                                            ? "Proses..."
-                                                                            : "Ubah Jurnal"}
-                                                                    </span>
-                                                                </PrimaryButton>
-                                                            </form>
-                                                        </div>
-                                                    </Modal>
-                                                    <div
-                                                        onClick={(e) =>
-                                                            handleDelete(
-                                                                e,
-                                                                jurnal.id
-                                                            )
-                                                        }
-                                                        className="font-medium text-red-800 hover:text-red-700 transition-all cursor-pointer flex justify-center gap-2"
-                                                    >
-                                                        <Trash />
-                                                    </div>
+                                                    {jurnal.photo && (
+                                                        <ImageViewer
+                                                            src={storageUrl(jurnal.photo)}
+                                                            alt={`Foto kegiatan ${jurnal.user?.name ?? ""}`}
+                                                            className="h-9 w-9"
+                                                        />
+                                                    )}
                                                 </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
+                                            </Td>
+                                            <Td>
+                                                <StatusBadge status={jurnal.status_verifikasi} mark={jurnal.mark} />
+                                                {jurnal.verifikator?.name && (
+                                                    <span className="mt-1 block text-xs text-slate-500">
+                                                        oleh {jurnal.verifikator.name}
+                                                    </span>
+                                                )}
+                                                {status === "ditolak" && jurnal.catatan_verifikasi && (
+                                                    <span
+                                                        className="mt-1 block max-w-[200px] truncate text-xs text-rose-700"
+                                                        title={jurnal.catatan_verifikasi}
+                                                    >
+                                                        “{jurnal.catatan_verifikasi}”
+                                                    </span>
+                                                )}
+                                            </Td>
+                                            <Td>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {bisaVerifikasi && status !== "disetujui" && (
+                                                        <IconButton
+                                                            label="Setujui absensi"
+                                                            variant="success"
+                                                            onClick={() => setVerifikasi({ jurnal, mode: "disetujui" })}
+                                                        >
+                                                            <CheckCircle2 />
+                                                        </IconButton>
+                                                    )}
+                                                    {bisaVerifikasi && status !== "ditolak" && (
+                                                        <IconButton
+                                                            label="Tolak absensi"
+                                                            variant="danger"
+                                                            onClick={() => setVerifikasi({ jurnal, mode: "ditolak" })}
+                                                        >
+                                                            <XCircle />
+                                                        </IconButton>
+                                                    )}
+                                                    {bisaUbah && (
+                                                        <>
+                                                            <IconButton
+                                                                label={status === "ditolak" ? "Perbaiki absensi" : "Ubah absensi"}
+                                                                variant="primary"
+                                                                onClick={() => setFormModal({ show: true, jurnal })}
+                                                            >
+                                                                <Pencil />
+                                                            </IconButton>
+                                                            <IconButton
+                                                                label="Hapus absensi"
+                                                                variant="danger"
+                                                                onClick={() => handleDelete(jurnal)}
+                                                            >
+                                                                <Trash2 />
+                                                            </IconButton>
+                                                        </>
+                                                    )}
+                                                    {isSiswa && status === "disetujui" && (
+                                                        <span className="text-xs text-slate-400">Terkunci</span>
+                                                    )}
+                                                </div>
+                                            </Td>
+                                        </Tr>
+                                    );
+                                })
                             ) : (
-                                <tr>
-                                    <td
-                                        className="p-2 text-sm font-medium text-center"
-                                        colSpan={3}
-                                    >
-                                        Tidak ada Jurnal Di tambahkan
-                                    </td>
-                                </tr>
+                                <TableEmpty colSpan={headers.length}>
+                                    {activeCount > 0 || filters?.search ? (
+                                        <EmptyState
+                                            title="Tidak ada absensi yang cocok"
+                                            description="Coba ubah kata kunci pencarian atau atur ulang filter."
+                                            action={
+                                                <SecondaryButton onClick={resetFilter}>
+                                                    Atur ulang filter
+                                                </SecondaryButton>
+                                            }
+                                        />
+                                    ) : (
+                                        <EmptyState
+                                            icon={<CalendarCheck2 />}
+                                            title="Belum ada absensi"
+                                            description={
+                                                isSiswa
+                                                    ? "Absensi yang Anda kirim setiap minggu akan tampil di sini."
+                                                    : "Absensi siswa bimbingan Anda akan tampil di sini setelah dikirim."
+                                            }
+                                        />
+                                    )}
+                                </TableEmpty>
                             )}
                         </tbody>
                     </Table>
-                </div>
-                {jurnals.data.length > 0 && (
-                    <Pagination datas={jurnals}></Pagination>
-                )}
+                    <Pagination datas={jurnals} />
+                </Card>
             </div>
-            <Modal
-                show={createModal}
-                onClose={() => setCreateModal(!createModal)}
-            >
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Tambah Jurnal"}
-                        onClick={() => {
-                            setCreateModal(!createModal);
-                        }}
-                    ></TitleModal>
-                    <form onSubmit={handleStore} className="p-4 md:p-5">
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="col-span-2">
-                                <InputLabel value={"Keterangan"} />
-                                <select
-                                    onChange={(e) =>
-                                        setData("keterangan", e.target.value)
-                                    }
-                                    value={data.keterangan}
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-1"
-                                >
-                                    <option disabled value="">
-                                        Default
-                                    </option>
-                                    <option value="hadir">Hadir</option>
-                                    <option value="sakit">Sakit</option>
-                                    <option value="izin">Izin</option>
-                                </select>
 
-                                <InputError
-                                    message={errors.keterangan}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Kegiatan"} />
-                                <Textarea
-                                    id="kegiatan"
-                                    value={data.kegiatan}
-                                    onChange={(e) =>
-                                        setData("kegiatan", e.target.value)
-                                    }
-                                    name="kegiatan"
-                                    placeholder={`Deskripsikan Kegiatan Anda`}
-                                />
-                                <InputError
-                                    message={errors.kegiatan}
-                                    className="mt-2"
-                                />
-                            </div>
-                            <div className="col-span-2">
-                                <InputLabel value={"Bukti Photo"} />
-                                <TextInput
-                                    id="photo"
-                                    type="file"
-                                    name="photo"
-                                    accept="image/*"
-                                    className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        setData("photo", file);
-                                        setImg(file);
-                                    }}
-                                />
-                                <InputError
-                                    message={errors.photo}
-                                    className="mt-2"
-                                />
-                            </div>
-                            {img ? (
-                                <img
-                                    className={`h-28 mt-4 w-28 object-center object-cover`}
-                                    src={URL.createObjectURL(img)}
-                                    alt={"No file Store"}
-                                />
-                            ) : (
-                                <div className="w-28 h-28 text-center grid place-content-center bg-gray-200 mt-4">
-                                    <p className="font-medium  text-xs text-slate-900">
-                                        No File Uploaded
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                        <PrimaryButton
-                            type="submit"
-                            className="gap-2"
-                            disabled={processing}
-                        >
-                            <Plus />
-                            <span className="block">
-                                {processing ? "Proses..." : "Tambah Jurnal"}
-                            </span>
-                        </PrimaryButton>
-                    </form>
-                </div>
-            </Modal>
-            <Modal show={sortModal} onClose={() => setSortModal(!sortModal)}>
-                <div className="relative bg-white rounded-lg shadow-sm ">
-                    <TitleModal
-                        icon={<X />}
-                        title={"Filter Dan Sorting Jurnal Siswa"}
-                        onClick={() => {
-                            setSortModal(!sortModal);
-                        }}
-                    ></TitleModal>
+            <AbsensiFormModal
+                show={formModal.show}
+                jurnal={formModal.jurnal}
+                periode={formModal.jurnal?.minggu_mulai ? { mulai: formModal.jurnal.minggu_mulai, selesai: formModal.jurnal.minggu_selesai } : periode}
+                onClose={() => setFormModal({ show: false, jurnal: formModal.jurnal })}
+            />
 
+            <VerifikasiModal
+                jurnal={verifikasi.jurnal}
+                mode={verifikasi.mode}
+                onClose={() => setVerifikasi({ jurnal: null, mode: null })}
+            />
+
+            <Modal show={sortModal} onClose={() => setSortModal(false)} maxWidth="lg">
+                <TitleModal
+                    title="Filter & Urutkan Absensi"
+                    description="Perubahan langsung diterapkan pada tabel."
+                    onClick={() => setSortModal(false)}
+                />
+                <ModalBody className="space-y-5">
                     <OptionSorting
                         dataSearch={dataSearch}
                         handleSearchChange={handleSearchChange}
                         datas={[
-                            { name: "Default", value: "" },
-                            { name: "Nama", value: "nama" },
+                            { name: "Bawaan (terbaru)", value: "" },
+                            ...(isSiswa ? [] : [{ name: "Nama siswa", value: "nama" }]),
+                            { name: "Periode minggu", value: "minggu_mulai" },
                             { name: "Keterangan", value: "keterangan" },
-                            { name: "kegiatan", value: "kegiatan" },
-                            { name: "Dibuat Pada", value: "created_at" },
+                            { name: "Status verifikasi", value: "status_verifikasi" },
+                            { name: "Tanggal dikirim", value: "created_at" },
                         ]}
                     />
-                    <div className="p-4 md:p-5">
-                        <h3 className="text-lg font-semibold text-gray-900 ">
-                            Filter Jurnal
-                        </h3>
-                        <div className="grid gap-4 mb-4 grid-cols-1">
-                            <div className="">
-                                <InputLabel value={"Marking"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.marking}
-                                    id="marking"
-                                    name="marking"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    <option value={"true"}>Dilihat</option>
-                                    <option value={"false"}>
-                                        Belum Dilihat
-                                    </option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="grid gap-4 mb-4 grid-cols-1">
-                            <div className="">
-                                <InputLabel value={"Keterangan"} />
-                                <select
-                                    onChange={(e) => handleSearchChange(e)}
-                                    value={dataSearch.keterangan}
-                                    id="keterangan"
-                                    name="keterangan"
-                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-stone-500 focus:border-stone-500 block w-full p-2.5 "
-                                >
-                                    <option value="">Default</option>
-                                    <option value="hadir">Hadir</option>
-                                    <option value="sakit">Sakit</option>
-                                    <option value="izin">Izin</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="grid gap-4 mb-4 grid-cols-2">
-                            <div className="">
-                                <InputLabel value={"Waktu Mulai"} />
-                                <TextInput
-                                    id="start_date"
-                                    type="date"
-                                    name="start_date"
-                                    value={dataSearch.start_date}
-                                    className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                    onChange={(e) => {
-                                        handleSearchChange(e);
-                                    }}
-                                />
-                            </div>
-
-                            {dataSearch.start_date !== "" && (
-                                <div className="">
-                                    <InputLabel value={"Waktu Berakhir"} />
-                                    <TextInput
-                                        id="end_date"
-                                        type="date"
-                                        name="end_date"
-                                        value={dataSearch.end_date}
-                                        className="mt-1 block w-full border border-gray-300 px-4 py-1.5"
-                                        onChange={(e) => {
-                                            handleSearchChange(e);
-                                        }}
-                                    />
-                                </div>
-                            )}
-                        </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField label="Keterangan" htmlFor="f-keterangan">
+                            <Select id="f-keterangan" name="keterangan" value={dataSearch.keterangan} onChange={handleSearchChange}>
+                                <option value="">Semua keterangan</option>
+                                <option value="hadir">Hadir</option>
+                                <option value="izin">Izin</option>
+                                <option value="sakit">Sakit</option>
+                            </Select>
+                        </FormField>
+                        <FormField label="Status verifikasi" htmlFor="f-status">
+                            <Select id="f-status" name="status" value={dataSearch.status} onChange={handleSearchChange}>
+                                <option value="">Semua status</option>
+                                <option value="pending">Menunggu</option>
+                                <option value="disetujui">Disetujui</option>
+                                <option value="ditolak">Ditolak</option>
+                            </Select>
+                        </FormField>
+                        <FormField label="Dikirim mulai tanggal" htmlFor="f-start">
+                            <TextInput id="f-start" type="date" name="start_date" className="w-full" value={dataSearch.start_date} onChange={handleSearchChange} />
+                        </FormField>
+                        <FormField
+                            label="Sampai tanggal"
+                            htmlFor="f-end"
+                            help={!dataSearch.start_date ? "Isi tanggal mulai terlebih dahulu." : undefined}
+                        >
+                            <TextInput
+                                id="f-end"
+                                type="date"
+                                name="end_date"
+                                className="w-full"
+                                min={dataSearch.start_date || undefined}
+                                disabled={!dataSearch.start_date}
+                                value={dataSearch.end_date}
+                                onChange={handleSearchChange}
+                            />
+                        </FormField>
                     </div>
-                </div>
+                </ModalBody>
+                <ModalFooter>
+                    <SecondaryButton onClick={resetFilter}>Atur ulang</SecondaryButton>
+                    <PrimaryButton type="button" onClick={() => setSortModal(false)}>
+                        Selesai
+                    </PrimaryButton>
+                </ModalFooter>
             </Modal>
         </AuthenticatedLayout>
     );

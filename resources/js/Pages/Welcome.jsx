@@ -1,100 +1,101 @@
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
-import Slider from "react-slick";
-import { Head, Link } from "@inertiajs/react";
 import Footer from "@/Components/Footer";
-const Welcome = ({ gambars }) => {
+import { assetUrl, storageUrl } from "@/Helpers/format";
+import { Head, Link, usePage } from "@inertiajs/react";
+import { ArrowRight, CalendarCheck2, ClipboardCheck, FileText, LayoutDashboard, LogIn, UserPlus } from "lucide-react";
+import Slider from "react-slick";
 
-    const settings = {
-        infinite: true,
-        fade: true,
-        slidesToShow: 1,
-        slidesToScroll: 1,
-        autoplay: true,
-        autoplaySpeed: 2000,
-        arrows: false,
-    };
+const FITUR = [
+    { icon: <CalendarCheck2 />, title: "Absensi mingguan", desc: "Siswa mengirim satu absensi setiap minggu lengkap dengan PDF bukti dan foto kegiatan." },
+    { icon: <ClipboardCheck />, title: "Verifikasi pembimbing", desc: "Pembimbing sekolah dan DU/DI menyetujui atau menolak absensi dengan catatan." },
+    { icon: <FileText />, title: "Rekap & laporan", desc: "Rekap kehadiran, nilai, dan laporan PKL siap diunduh dalam format Excel dan PDF." },
+];
+
+export default function Welcome({ gambars = [] }) {
+    const { auth } = usePage().props;
+    const masuk = Boolean(auth?.user);
+
     return (
-        <div
-            className="h-screen object-cover object-center w-full shadow-2xl"
-            style={{ background: "url(./header2.avif)" }}
-        >
+        <div className="min-h-screen bg-slate-50">
             <Head title="Selamat Datang" />
-            <nav className="bg-transparent relative w-full z-20 top-0 start-0 ">
-                <div className="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
-                    <a
-                        href="https://smkn1gedangan-malang.sch.id"
-                        target="_blank"
-                        className="flex items-center space-x-3 rtl:space-x-reverse"
-                    >
-                        <img
-                            src="./img/logo.png"
-                            className="h-8"
-                            alt="Logo"
-                            loading="lazy"
-                        />
-                        <span className="hidden md:block self-center text-2xl font-semibold whitespace-nowrap text-slate-900 md:text-white">
-                            E-PKL
-                        </span>
-                    </a>
-                    <div className="flex md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
-                        <Link
-                            as="button"
-                            href={route("login")}
-                            className="text-white bg-gradient-to-br from-emerald-700 to-sky-700  hover:bg-emerald-800 focus:ring-2 focus:outline-none focus:ring-emerald-300 rounded-lg text-sm px-4 py-2 text-center border border-white capitalize font-bold"
-                        >
-                            Log in
-                        </Link>
+            <section
+                className="relative overflow-hidden bg-blue-950 text-white"
+                style={{ backgroundImage: `url(${assetUrl("header2.avif")})`, backgroundSize: "cover", backgroundPosition: "center" }}
+            >
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-950/95 via-blue-900/85 to-emerald-900/75" />
+                <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
+                    <nav className="flex items-center justify-between py-5">
+                        <a href="https://smkn1gedangan-malang.sch.id" target="_blank" rel="noopener" className="flex items-center gap-3">
+                            <img src={assetUrl("img/logo.png")} alt="" className="h-10 w-10 rounded-xl bg-white object-contain p-1" />
+                            <span className="leading-tight">
+                                <span className="block font-semibold">E-PKL</span>
+                                <span className="block text-xs text-blue-100">SMKN 1 Gedangan</span>
+                            </span>
+                        </a>
+                        {masuk ? (
+                            <Link href={route("dashboard")} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50">
+                                <LayoutDashboard className="h-4 w-4" /> Dashboard
+                            </Link>
+                        ) : (
+                            <Link href={route("login")} className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-50">
+                                <LogIn className="h-4 w-4" /> Masuk
+                            </Link>
+                        )}
+                    </nav>
+
+                    <div className="grid items-center gap-10 py-12 md:grid-cols-2 md:py-20">
+                        <div>
+                            <p className="inline-flex rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-emerald-200 ring-1 ring-inset ring-white/20">Sistem Rekap Praktik Kerja Lapangan</p>
+                            <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl">
+                                Monitoring PKL yang <span className="text-emerald-300">rapi dan terukur</span>.
+                            </h1>
+                            <p className="mt-4 max-w-lg text-base text-blue-100 sm:text-lg">Absensi mingguan, verifikasi pembimbing, penilaian, dan dokumentasi PKL dalam satu platform.</p>
+                            <div className="mt-8 flex flex-wrap gap-3">
+                                {masuk ? (
+                                    <Link href={route("dashboard")} className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600">
+                                        Buka Dashboard <ArrowRight className="h-4 w-4" />
+                                    </Link>
+                                ) : (
+                                    <>
+                                        <Link href={route("login")} className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600">
+                                            <LogIn className="h-4 w-4" /> Masuk
+                                        </Link>
+                                        <Link href={route("aktivasi")} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-inset ring-white/30 hover:bg-white/20">
+                                            <UserPlus className="h-4 w-4" /> Aktivasi Akun Siswa
+                                        </Link>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                        {gambars.length > 0 && (
+                            <div className="mx-auto w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/20">
+                                <Slider infinite={gambars.length > 1} fade slidesToShow={1} slidesToScroll={1} autoplay autoplaySpeed={3500} arrows={false} dots={gambars.length > 1}>
+                                    {gambars.map((g) => (
+                                        <div key={g.id}>
+                                            <img src={storageUrl(g.url)} alt="Dokumentasi kegiatan PKL" loading="lazy" className="aspect-video w-full object-cover" />
+                                        </div>
+                                    ))}
+                                </Slider>
+                            </div>
+                        )}
                     </div>
                 </div>
-            </nav>
+            </section>
 
-            <div className="w-full p-2 md:p-8 mt-4">
-                <h1 className="mb-4 text-3xl font-extrabold text-white md:text-5xl lg:text-6xl">
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r to-emerald-600 from-sky-400">
-                        MODERN
-                    </span>{" "}
-                    RECAP DATA.
-                </h1>
-                <p className="text-lg font-normal text-gray-200 lg:text-xl ">
-                    Monitoring, Penilaian, dan Dokumentasi PKL dalam Satu
-                    Platform Digital yang Praktis dan Terintegrasi.
-                </p>
-            </div>
-            <div className=" flex mt-4 md:mt-10 justify-center gap-2 p-2 items-center flex-wrap md:p-8">
-                <div className="slider-container w-full mt-8">
-                    <Slider
-                        {...settings}
-                        className=""
-                    >
-                        {gambars.length > 0
-                            ? gambars.map((gambar) => (
-                                  <div
-                                      key={gambar.id}
-                                      className="relative max-w-md left-1/2 -translate-x-1/2"
-                                  >
-                                      <img
-                                          className="object-center object-cover rounded-md"
-                                          src={`./storage/${gambar.url}`}
-                                          alt=""
-                                      />
-                                      <div
-                                          style={{
-                                              boxShadow:
-                                                  "inset 0 0 3rem #38bdf8",
-                                          }}
-                                          className="inset-0 absolute opacity-90 z-30 shadow-emerald-500 shadow-2xl"
-                                      ></div>
-                                  </div>
-                              ))
-                            : ""}
-                    </Slider>
+            <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+                <div className="grid gap-4 md:grid-cols-3">
+                    {FITUR.map((f) => (
+                        <div key={f.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700 [&_svg]:h-5 [&_svg]:w-5">{f.icon}</span>
+                            <h2 className="mt-4 font-semibold text-slate-900">{f.title}</h2>
+                            <p className="mt-1 text-sm text-slate-600">{f.desc}</p>
+                        </div>
+                    ))}
                 </div>
-            </div>
+            </section>
 
             <Footer />
         </div>
     );
-};
-
-export default Welcome;
+}
